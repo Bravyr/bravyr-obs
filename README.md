@@ -50,6 +50,54 @@ func main() {
 }
 ```
 
+## Logging
+
+`obs.Init()` constructs a zerolog-based structured logger automatically. Access
+it via `o.Logger()`:
+
+```go
+o, err := obs.Init(obs.Config{
+    ServiceName: "my-api",
+    Environment: "production",
+    LogLevel:    "info",
+    SeqURL:      "https://seq.internal:5341",
+    SeqAPIKey:   os.Getenv("SEQ_API_KEY"),
+})
+if err != nil {
+    panic(err)
+}
+defer o.Shutdown(context.Background())
+
+log := o.Logger()
+log.Info().Str("version", "1.0.0").Msg("service started")
+log.Error().Err(err).Str("user_id", uid).Msg("database query failed")
+
+// Derive a request-scoped sub-logger with fixed fields.
+reqLog := log.With().Str("request_id", reqID).Logger()
+reqLog.Info().Msg("handling request")
+```
+
+### Logging configuration
+
+| Behaviour | Config |
+|---|---|
+| Human-readable console output | `DevMode: true` (development only) |
+| Ship logs to Seq | Set `SeqURL` (must be `https://` in non-dev mode) |
+| Authenticate to Seq | Set `SeqAPIKey` |
+| Minimum log level | `LogLevel: "debug"` / `"info"` / `"warn"` / `"error"` / `"fatal"` |
+
+The `log` package can also be used standalone without the root facade:
+
+```go
+import obslog "github.com/bravyr/bravyr-obs/log"
+
+logger, err := obslog.New(obslog.Config{
+    ServiceName: "worker",
+    Level:       "debug",
+    DevMode:     true,
+})
+```
+
 ## Installation
 
 ```bash
@@ -60,7 +108,7 @@ go get github.com/bravyr/bravyr-obs
 
 | Feature | Package | Status |
 |---|---|---|
-| Structured logging (zerolog + Seq CLEF) | `log` | Planned |
+| Structured logging (zerolog + Seq CLEF) | `log` | Available |
 | Distributed tracing (OpenTelemetry OTLP) | `trace` | Planned |
 | Prometheus metrics | `metrics` | Planned |
 | Chi middleware bundle | `middleware` | Planned |

@@ -30,11 +30,19 @@ func (c Config) Validate() error {
 	}
 
 	validLevels := map[string]bool{
-		"trace": true, "debug": true, "info": true,
-		"warn": true, "error": true, "fatal": true, "panic": true,
+		"debug": true, "info": true,
+		"warn": true, "error": true, "fatal": true,
 	}
 	if !validLevels[strings.ToLower(c.LogLevel)] {
 		errs = append(errs, fmt.Errorf("LogLevel %q is not valid", c.LogLevel))
+	}
+
+	if c.SeqURL != "" && !c.DevMode && !strings.HasPrefix(c.SeqURL, "https://") {
+		errs = append(errs, fmt.Errorf("SeqURL must use https:// in non-dev mode, got %q", c.SeqURL))
+	}
+
+	if c.DevMode && strings.EqualFold(c.Environment, "production") {
+		errs = append(errs, errors.New("DevMode must not be enabled in production environment"))
 	}
 
 	return errors.Join(errs...)
