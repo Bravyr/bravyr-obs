@@ -147,13 +147,70 @@ endpoint in local development without code changes.
 | Sample a fraction | `SampleRate: 0.1` (10%) |
 | Insecure gRPC transport | `DevMode: true` (development only) |
 
+## Metrics
+
+`obs.Init()` creates an isolated Prometheus registry automatically. Access the
+`/metrics` handler via `o.MetricsHandler()` and create custom business metrics
+via `o.Metrics()`:
+
+```go
+o, err := obs.Init(obs.Config{
+    ServiceName:   "my-api",
+    Environment:   "production",
+    MetricsPrefix: "myapi", // all metrics become "myapi_http_request_duration_seconds" etc.
+})
+if err != nil {
+    panic(err)
+}
+defer o.Shutdown(context.Background())
+
+router := chi.NewRouter()
+// HTTPMiddleware records duration, total count, and active connections.
+// Path labels use Chi route patterns (/items/{id}) not raw paths — this
+// prevents label cardinality from growing with every unique path parameter.
+router.Use(o.Metrics().HTTPMiddleware())
+
+// Serve the Prometheus text format at /metrics.
+router.Get("/metrics", o.MetricsHandler().ServeHTTP)
+
+// Create custom business metrics scoped to the same isolated registry.
+ordersTotal, err := o.Metrics().NewCounter(
+    "orders_total",
+    "total orders placed",
+    []string{"status"},
+)
+if err != nil {
+    panic(err)
+}
+ordersTotal.WithLabelValues("success").Inc()
+
+dbLatency, err := o.Metrics().NewHistogram(
+    "db_query_duration_seconds",
+    "database query latency",
+    []string{"table"},
+    prometheus.DefBuckets,
+)
+if err != nil {
+    panic(err)
+}
+dbLatency.WithLabelValues("orders").Observe(0.012)
+```
+
+The built-in HTTP metrics are:
+
+| Metric | Type | Labels |
+|---|---|---|
+| `{prefix}_http_request_duration_seconds` | Histogram | `method`, `path`, `status_code` |
+| `{prefix}_http_requests_total` | Counter | `method`, `path`, `status_code` |
+| `{prefix}_http_active_requests` | Gauge | *(none)* |
+
 ## Features
 
 | Feature | Package | Status |
 |---|---|---|
 | Structured logging (zerolog + Seq CLEF) | `log` | Available |
 | Distributed tracing (OpenTelemetry OTLP) | `trace` | Available |
-| Prometheus metrics | `metrics` | Planned |
+| Prometheus metrics | `metrics` | Available |
 | Chi middleware bundle | `middleware` | Planned |
 | Health check endpoint | `health` | Available (typed checkers: Postgres, Redis) |
 | Environment-based configuration | `config` | Available |
@@ -173,6 +230,7 @@ All configuration fields can be set via struct literal or environment variables:
 | `OTLPEndpoint` | `OBS_OTLP_ENDPOINT` | | OpenTelemetry Collector gRPC endpoint |
 | `SampleRate` | `OBS_SAMPLE_RATE` | `1.0` | Fraction of traces to sample (0.0–1.0); overridden to 1.0 when `DevMode` is true |
 | `DevMode` | `OBS_DEV_MODE` | `false` | Enable pretty console logging and always-sample tracing |
+| `MetricsPrefix` | `OBS_METRICS_PREFIX` | | Prefix prepended to all metric names (e.g. `"myapi"` → `"myapi_http_requests_total"`); empty means no prefix |
 
 ## Architecture
 

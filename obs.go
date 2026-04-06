@@ -11,6 +11,7 @@ import (
 	"github.com/bravyr/bravyr-obs/config"
 	"github.com/bravyr/bravyr-obs/health"
 	obslog "github.com/bravyr/bravyr-obs/log"
+	obsmetrics "github.com/bravyr/bravyr-obs/metrics"
 	obstrace "github.com/bravyr/bravyr-obs/trace"
 )
 
@@ -20,9 +21,10 @@ type Config = config.Config
 // Obs holds the initialized observability providers and exposes
 // middleware and health check handlers as methods.
 type Obs struct {
-	cfg    Config
-	logger *obslog.Logger
-	tracer *obstrace.Provider
+	cfg     Config
+	logger  *obslog.Logger
+	tracer  *obstrace.Provider
+	metrics *obsmetrics.Registry
 }
 
 // Init initializes logging, tracing, and metrics based on the provided
@@ -58,7 +60,18 @@ func Init(cfg Config) (*Obs, error) {
 		return nil, fmt.Errorf("trace init: %w", err)
 	}
 
-	return &Obs{cfg: cfg, logger: logger, tracer: tp}, nil
+	metricsReg, err := obsmetrics.Init(obsmetrics.Config{
+		Prefix: cfg.MetricsPrefix,
+	})
+	if err != nil {
+		_ = logger.Shutdown(context.Background())
+		if tp != nil {
+			_ = tp.Shutdown(context.Background())
+		}
+		return nil, fmt.Errorf("metrics init: %w", err)
+	}
+
+	return &Obs{cfg: cfg, logger: logger, tracer: tp, metrics: metricsReg}, nil
 }
 
 // Logger returns the structured logger. It is safe to use from multiple
@@ -71,12 +84,23 @@ func (o *Obs) Logger() *obslog.Logger { return o.logger }
 // valid (possibly no-op) provider.
 func (o *Obs) TracerProvider() *obstrace.Provider { return o.tracer }
 
+// Metrics returns the Prometheus metrics registry. Use it to create custom
+// business metrics via NewCounter and NewHistogram.
+func (o *Obs) Metrics() *obsmetrics.Registry { return o.metrics }
+
+// MetricsHandler returns an http.Handler that serves the Prometheus text
+// exposition format. Mount it on /metrics in your router.
+func (o *Obs) MetricsHandler() http.Handler { return o.metrics.Handler() }
+
 // Shutdown flushes all telemetry pipelines and releases resources.
 // The tracer is shut down before the logger so any final span-related log
 // lines can still be emitted during the tracer drain.
 func (o *Obs) Shutdown(ctx context.Context) {
 	if o.tracer != nil {
 		_ = o.tracer.Shutdown(ctx)
+	}
+	if o.metrics != nil {
+		_ = o.metrics.Shutdown(ctx)
 	}
 	if o.logger != nil {
 		_ = o.logger.Shutdown(ctx)

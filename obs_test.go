@@ -111,6 +111,40 @@ func TestShutdown_flushesTracer(t *testing.T) {
 	o.Shutdown(context.Background())
 }
 
+func TestInit_createsMetrics(t *testing.T) {
+	o, err := Init(Config{ServiceName: "test-svc", LogLevel: "info"})
+	if err != nil {
+		t.Fatalf("Init() returned error: %v", err)
+	}
+	defer o.Shutdown(context.Background())
+
+	if o.Metrics() == nil {
+		t.Fatal("Metrics() returned nil after Init")
+	}
+}
+
+func TestMetricsHandler(t *testing.T) {
+	o, err := Init(Config{ServiceName: "test-svc", LogLevel: "info"})
+	if err != nil {
+		t.Fatalf("Init() returned error: %v", err)
+	}
+	defer o.Shutdown(context.Background())
+
+	h := o.MetricsHandler()
+	if h == nil {
+		t.Fatal("MetricsHandler() returned nil")
+	}
+
+	// Verify the handler serves a valid 200 response.
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 from MetricsHandler(), got %d", rec.Code)
+	}
+}
+
 func TestHealthHandler_noChecks(t *testing.T) {
 	o, err := Init(Config{ServiceName: "test-svc", LogLevel: "info"})
 	if err != nil {
