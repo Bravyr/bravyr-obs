@@ -8,13 +8,11 @@ linters:
     - unused
     - gosec
     - ineffassign
-
-linters-settings:
-  gosec:
-    excludes:
-      - G104
+  settings:
+    gosec:
+      excludes:
+        - G104
 
 issues:
-  exclude-use-default: false
   max-issues-per-linter: 0
   max-same-issues: 0
