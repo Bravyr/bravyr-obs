@@ -104,12 +104,55 @@ logger, err := obslog.New(obslog.Config{
 go get github.com/bravyr/bravyr-obs
 ```
 
+## Tracing
+
+`obs.Init()` wires an OpenTelemetry tracer automatically. `obs.Middleware()` wraps
+[otelchi](https://github.com/riandyrn/otelchi) to create a span per request, named
+after the matched Chi route pattern.
+
+```go
+o, err := obs.Init(obs.Config{
+    ServiceName:  "my-api",
+    Environment:  "production",
+    OTLPEndpoint: "otel-collector:4317",
+    SampleRate:   0.1, // sample 10% of traces in production
+})
+if err != nil {
+    panic(err)
+}
+defer o.Shutdown(context.Background())
+
+router := chi.NewRouter()
+router.Use(o.Middleware()) // creates spans for every request
+
+// Optionally enrich spans with user and workspace identity.
+// Place after your auth middleware so the user is already resolved.
+router.Use(trace.UserAttributesMiddleware(
+    func(r *http.Request) string { return userIDFromContext(r.Context()) },
+    func(r *http.Request) string { return workspaceIDFromContext(r.Context()) },
+))
+```
+
+When `OTLPEndpoint` is empty, `Init()` installs a no-op tracer — no spans are
+exported and no network connection is made. This makes it safe to omit the
+endpoint in local development without code changes.
+
+### Tracing configuration
+
+| Behaviour | Config |
+|---|---|
+| Export spans to a collector | Set `OTLPEndpoint` (e.g. `"otel-collector:4317"`) |
+| Always sample (local dev) | `DevMode: true` |
+| Never sample | `SampleRate: 0.0` |
+| Sample a fraction | `SampleRate: 0.1` (10%) |
+| Insecure gRPC transport | `DevMode: true` (development only) |
+
 ## Features
 
 | Feature | Package | Status |
 |---|---|---|
 | Structured logging (zerolog + Seq CLEF) | `log` | Available |
-| Distributed tracing (OpenTelemetry OTLP) | `trace` | Planned |
+| Distributed tracing (OpenTelemetry OTLP) | `trace` | Available |
 | Prometheus metrics | `metrics` | Planned |
 | Chi middleware bundle | `middleware` | Planned |
 | Health check endpoint | `health` | Available (typed checkers: Postgres, Redis) |
@@ -128,7 +171,8 @@ All configuration fields can be set via struct literal or environment variables:
 | `SeqURL` | `OBS_SEQ_URL` | | Seq server URL for log shipping |
 | `SeqAPIKey` | `OBS_SEQ_API_KEY` | | Seq API key (separate from URL for security) |
 | `OTLPEndpoint` | `OBS_OTLP_ENDPOINT` | | OpenTelemetry Collector gRPC endpoint |
-| `DevMode` | `OBS_DEV_MODE` | `false` | Enable pretty console logging |
+| `SampleRate` | `OBS_SAMPLE_RATE` | `1.0` | Fraction of traces to sample (0.0–1.0); overridden to 1.0 when `DevMode` is true |
+| `DevMode` | `OBS_DEV_MODE` | `false` | Enable pretty console logging and always-sample tracing |
 
 ## Architecture
 

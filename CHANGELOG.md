@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-04-06
+
+### Added
+
+- OpenTelemetry distributed tracing with OTLP/gRPC export (`trace` package)
+- HTTP middleware for automatic span creation (`trace.HTTPMiddleware`) via `otelchi`
+- User attributes middleware that enriches spans with `user_id` and `workspace_id` (`trace.UserAttributesMiddleware`)
+- Configurable sampling rate: `SampleRate` field in `config.Config` (env `OBS_SAMPLE_RATE`, default `1.0`)
+- W3C Trace Context and Baggage propagators registered globally on `Init()`
+- `trace.Config` with `Validate()` for standalone trace package usage
+- `Obs.TracerProvider()` accessor to expose the trace provider to callers
+- tracestate header length cap in `HTTPMiddleware` to prevent memory pressure from malformed headers
+
+### Changed
+
+- `obs.Middleware()` now returns the OTel HTTP trace middleware instead of a pass-through
+- `obs.Shutdown()` now flushes the tracer before the logger so final span-related log lines can still be emitted
+
 ## [0.2.0] - 2026-04-06
 
 ### Added

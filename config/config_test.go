@@ -203,3 +203,45 @@ func TestValidate_devModeDevelopmentOK(t *testing.T) {
 		t.Fatalf("expected no error for DevMode=true in development, got: %v", err)
 	}
 }
+
+func TestValidate_devModeEmptyEnvironmentOK(t *testing.T) {
+	cfg := Config{
+		ServiceName: "test-svc",
+		LogLevel:    "info",
+		DevMode:     true,
+		Environment: "",
+	}
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("expected no error for DevMode=true with empty Environment, got: %v", err)
+	}
+}
+
+func TestValidate_sampleRateValid(t *testing.T) {
+	for _, rate := range []float64{0.0, 0.5, 1.0} {
+		cfg := Config{
+			ServiceName: "test-svc",
+			LogLevel:    "info",
+			SampleRate:  rate,
+		}
+		if err := cfg.Validate(); err != nil {
+			t.Fatalf("expected SampleRate %g to be valid, got: %v", rate, err)
+		}
+	}
+}
+
+func TestValidate_sampleRateInvalid(t *testing.T) {
+	for _, rate := range []float64{-0.1, 1.1} {
+		cfg := Config{
+			ServiceName: "test-svc",
+			LogLevel:    "info",
+			SampleRate:  rate,
+		}
+		err := cfg.Validate()
+		if err == nil {
+			t.Fatalf("expected error for SampleRate %g", rate)
+		}
+		if !strings.Contains(err.Error(), "SampleRate") {
+			t.Fatalf("expected error about SampleRate for rate %g, got: %v", rate, err)
+		}
+	}
+}
