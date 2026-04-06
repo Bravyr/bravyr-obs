@@ -11,13 +11,14 @@ import (
 
 // Config holds all settings needed to initialize the observability stack.
 type Config struct {
-	ServiceName  string `env:"OBS_SERVICE_NAME,required"`
-	Environment  string `env:"OBS_ENVIRONMENT"  envDefault:"development"`
-	LogLevel     string `env:"OBS_LOG_LEVEL"    envDefault:"info"`
-	SeqURL       string `env:"OBS_SEQ_URL"`
-	SeqAPIKey    string `env:"OBS_SEQ_API_KEY"`
-	OTLPEndpoint string `env:"OBS_OTLP_ENDPOINT"`
-	DevMode      bool   `env:"OBS_DEV_MODE"     envDefault:"false"`
+	ServiceName  string  `env:"OBS_SERVICE_NAME,required"`
+	Environment  string  `env:"OBS_ENVIRONMENT"   envDefault:"development"`
+	LogLevel     string  `env:"OBS_LOG_LEVEL"     envDefault:"info"`
+	SeqURL       string  `env:"OBS_SEQ_URL"`
+	SeqAPIKey    string  `env:"OBS_SEQ_API_KEY"`
+	OTLPEndpoint string  `env:"OBS_OTLP_ENDPOINT"`
+	SampleRate   float64 `env:"OBS_SAMPLE_RATE"   envDefault:"1.0"`
+	DevMode      bool    `env:"OBS_DEV_MODE"      envDefault:"false"`
 }
 
 // Validate checks that all required configuration fields are set and
@@ -45,6 +46,10 @@ func (c Config) Validate() error {
 		errs = append(errs, errors.New("DevMode must not be enabled in production environment"))
 	}
 
+	if c.SampleRate < 0 || c.SampleRate > 1 {
+		errs = append(errs, fmt.Errorf("SampleRate must be between 0.0 and 1.0, got %f", c.SampleRate))
+	}
+
 	return errors.Join(errs...)
 }
 
@@ -57,8 +62,8 @@ func (c Config) String() string {
 	}
 
 	return fmt.Sprintf(
-		"Config{ServiceName:%q Environment:%q LogLevel:%q SeqURL:%q SeqAPIKey:%q OTLPEndpoint:%q DevMode:%t}",
-		c.ServiceName, c.Environment, c.LogLevel, c.SeqURL, apiKey, c.OTLPEndpoint, c.DevMode,
+		"Config{ServiceName:%q Environment:%q LogLevel:%q SeqURL:%q SeqAPIKey:%q OTLPEndpoint:%q SampleRate:%g DevMode:%t}",
+		c.ServiceName, c.Environment, c.LogLevel, c.SeqURL, apiKey, c.OTLPEndpoint, c.SampleRate, c.DevMode,
 	)
 }
 
@@ -70,13 +75,14 @@ func (c Config) MarshalJSON() ([]byte, error) {
 	}
 
 	return json.Marshal(struct {
-		ServiceName  string `json:"service_name"`
-		Environment  string `json:"environment"`
-		LogLevel     string `json:"log_level"`
-		SeqURL       string `json:"seq_url"`
-		SeqAPIKey    string `json:"seq_api_key"`
-		OTLPEndpoint string `json:"otlp_endpoint"`
-		DevMode      bool   `json:"dev_mode"`
+		ServiceName  string  `json:"service_name"`
+		Environment  string  `json:"environment"`
+		LogLevel     string  `json:"log_level"`
+		SeqURL       string  `json:"seq_url"`
+		SeqAPIKey    string  `json:"seq_api_key"`
+		OTLPEndpoint string  `json:"otlp_endpoint"`
+		SampleRate   float64 `json:"sample_rate"`
+		DevMode      bool    `json:"dev_mode"`
 	}{
 		ServiceName:  c.ServiceName,
 		Environment:  c.Environment,
@@ -84,6 +90,7 @@ func (c Config) MarshalJSON() ([]byte, error) {
 		SeqURL:       c.SeqURL,
 		SeqAPIKey:    apiKey,
 		OTLPEndpoint: c.OTLPEndpoint,
+		SampleRate:   c.SampleRate,
 		DevMode:      c.DevMode,
 	})
 }

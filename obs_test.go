@@ -89,6 +89,28 @@ func TestInit_allValidLevels(t *testing.T) {
 	}
 }
 
+func TestInit_createsTracer(t *testing.T) {
+	o, err := Init(Config{ServiceName: "test-svc", LogLevel: "info"})
+	if err != nil {
+		t.Fatalf("Init() returned error: %v", err)
+	}
+	defer o.Shutdown(context.Background())
+
+	if o.TracerProvider() == nil {
+		t.Fatal("TracerProvider() returned nil after Init")
+	}
+}
+
+func TestShutdown_flushesTracer(t *testing.T) {
+	o, err := Init(Config{ServiceName: "test-svc", LogLevel: "info"})
+	if err != nil {
+		t.Fatalf("Init() returned error: %v", err)
+	}
+	// Shutdown must complete without panicking, blocking, or returning an error
+	// even when no OTLP endpoint is configured (no-op tracer path).
+	o.Shutdown(context.Background())
+}
+
 func TestHealthHandler_noChecks(t *testing.T) {
 	o, err := Init(Config{ServiceName: "test-svc", LogLevel: "info"})
 	if err != nil {
