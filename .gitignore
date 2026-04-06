@@ -1,0 +1,51 @@
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Build output
+/bin/
+/dist/
+
+# Coverage
+coverage.html
+coverage.txt
+coverage.out
+
+# Vendor (using modules)
+/vendor/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Environment and secrets
+.env
+.env.*
+*.env
+*.pem
+*.key
+*.crt
+
+# Security scan artifacts
+gosec-report.json
+*.sarif
+
+# Additional secret file patterns
+secrets.json
+credentials.json
+*.secret
+config.local.yaml
+config.local.yml
+config.local.toml
+
+# OS
+.DS_Store
+Thumbs.db

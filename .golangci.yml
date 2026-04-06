@@ -1,0 +1,18 @@
+version: "2"
+
+linters:
+  enable:
+    - errcheck
+    - govet
+    - staticcheck
+    - unused
+    - gosec
+    - ineffassign
+  settings:
+    gosec:
+      excludes:
+        - G104
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
