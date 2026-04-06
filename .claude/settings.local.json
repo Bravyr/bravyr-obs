@@ -1,0 +1,30 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(gh issue:*)",
+      "Bash(make sqlc:*)",
+      "Bash(go build:*)",
+      "Bash(make lint:*)",
+      "Bash(make test:*)",
+      "Bash(go test:*)",
+      "Bash(make sqlc-diff:*)",
+      "Bash(make swagger:*)",
+      "Bash(find:*)",
+      "Bash(xargs grep:*)",
+      "Bash(gh project:*)",
+      "Bash(go mod:*)",
+      "Bash(gh pr:*)",
+      "Bash(grep:*)",
+      "Bash(gh run:*)",
+      "Bash(go get:*)",
+      "Bash(git checkout:*)",
+      "Bash(git pull:*)",
+      "Bash(git add:*)",
+      "Bash(git push:*)",
+      "Bash(git fetch:*)",
+      "Bash(git merge:*)",
+      "Bash(go vet:*)",
+      "Bash(golangci-lint help:*)"
+    ]
+  }
+}
