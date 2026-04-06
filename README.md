@@ -11,16 +11,24 @@ package main
 import (
 	"context"
 	"net/http"
+	"time"
 
 	obs "github.com/bravyr/bravyr-obs"
 	"github.com/bravyr/bravyr-obs/health"
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/redis/go-redis/v9"
 )
 
 func main() {
-	// Initialize your database pool (example).
 	pool, _ := pgxpool.New(context.Background(), "postgres://localhost:5432/mydb")
+	rdb := redis.NewClient(&redis.Options{Addr: "localhost:6379"})
+
+	// Build a Checker with a global 5s timeout and per-check overrides.
+	checker := health.New(health.WithTimeout(5 * time.Second))
+	checker.AddCheck("postgres", health.PgxCheck(pool))
+	checker.AddCheck("redis", health.RedisCheck(rdb),
+		health.WithCheckTimeout(2*time.Second))
 
 	o, err := obs.Init(obs.Config{
 		ServiceName:  "socialup-api",
@@ -36,9 +44,7 @@ func main() {
 
 	router := chi.NewRouter()
 	router.Use(o.Middleware())
-	router.Get("/api/health", o.HealthHandler(map[string]health.CheckFunc{
-		"db": func(ctx context.Context) error { return pool.Ping(ctx) },
-	}))
+	router.Get("/api/health", checker.Handler())
 
 	http.ListenAndServe(":8080", router)
 }
@@ -58,7 +64,7 @@ go get github.com/bravyr/bravyr-obs
 | Distributed tracing (OpenTelemetry OTLP) | `trace` | Planned |
 | Prometheus metrics | `metrics` | Planned |
 | Chi middleware bundle | `middleware` | Planned |
-| Health check endpoint | `health` | Available |
+| Health check endpoint | `health` | Available (typed checkers: Postgres, Redis) |
 | Environment-based configuration | `config` | Available |
 | Local monitoring stack (Docker Compose) | `stack` | Planned |
 
@@ -86,7 +92,7 @@ github.com/bravyr/bravyr-obs
 ├── trace/          OpenTelemetry tracer provider setup
 ├── metrics/        Prometheus metrics registry and handler
 ├── middleware/     Chi middleware bundle (logging, tracing, metrics)
-├── health/         Health check helpers (Postgres, Redis, Temporal)
+├── health/         Health check helpers (Checker builder, PgxCheck, RedisCheck)
 └── stack/          Docker Compose monitoring stack
 ```
 
