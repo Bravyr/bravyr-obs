@@ -119,3 +119,87 @@ func TestMarshalJSON_emptyAPIKey(t *testing.T) {
 		t.Fatal("MarshalJSON should not show *** when API key is empty")
 	}
 }
+
+func TestValidate_seqURLRequiresHTTPS(t *testing.T) {
+	cfg := Config{
+		ServiceName: "test-svc",
+		LogLevel:    "info",
+		SeqURL:      "http://seq.example.com:5341",
+		DevMode:     false,
+	}
+	err := cfg.Validate()
+	if err == nil {
+		t.Fatal("expected error for non-https SeqURL in non-dev mode")
+	}
+	if !strings.Contains(err.Error(), "SeqURL") {
+		t.Fatalf("expected error about SeqURL, got: %v", err)
+	}
+}
+
+func TestValidate_seqURLHTTPAllowedInDevMode(t *testing.T) {
+	cfg := Config{
+		ServiceName: "test-svc",
+		LogLevel:    "info",
+		SeqURL:      "http://localhost:5341",
+		DevMode:     true,
+		Environment: "development",
+	}
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("expected no error for http SeqURL in dev mode, got: %v", err)
+	}
+}
+
+func TestValidate_seqURLHTTPSAlwaysValid(t *testing.T) {
+	cfg := Config{
+		ServiceName: "test-svc",
+		LogLevel:    "info",
+		SeqURL:      "https://seq.example.com:5341",
+		DevMode:     false,
+	}
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("expected no error for https SeqURL, got: %v", err)
+	}
+}
+
+func TestValidate_devModeProductionError(t *testing.T) {
+	cfg := Config{
+		ServiceName: "test-svc",
+		LogLevel:    "info",
+		DevMode:     true,
+		Environment: "production",
+	}
+	err := cfg.Validate()
+	if err == nil {
+		t.Fatal("expected error for DevMode=true in production environment")
+	}
+	if !strings.Contains(err.Error(), "DevMode") {
+		t.Fatalf("expected error about DevMode, got: %v", err)
+	}
+}
+
+func TestValidate_devModeProductionCaseInsensitive(t *testing.T) {
+	for _, env := range []string{"Production", "PRODUCTION", "production"} {
+		cfg := Config{
+			ServiceName: "test-svc",
+			LogLevel:    "info",
+			DevMode:     true,
+			Environment: env,
+		}
+		err := cfg.Validate()
+		if err == nil {
+			t.Fatalf("expected error for DevMode=true with Environment=%q", env)
+		}
+	}
+}
+
+func TestValidate_devModeDevelopmentOK(t *testing.T) {
+	cfg := Config{
+		ServiceName: "test-svc",
+		LogLevel:    "info",
+		DevMode:     true,
+		Environment: "development",
+	}
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("expected no error for DevMode=true in development, got: %v", err)
+	}
+}

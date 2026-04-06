@@ -11,6 +11,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Health check builder with `New()`, `AddCheck()`, and per-check timeouts (`WithCheckTimeout`)
 - `PgxCheck()` and `RedisCheck()` typed checkers (interface-based, zero driver imports)
+- Structured logging with zerolog (`log` package): `Logger` type with `Debug()`, `Info()`, `Warn()`, `Error()`, `Fatal()`, `With()`, and `Shutdown()`
+- Seq CLEF HTTP async sink: batching up to 100 events per POST, 500 ms flush interval, channel buffer of 1024, dropped-event and send-failure counters
+- Seq TLS enforcement: minimum TLS 1.2 on the HTTP client used for log shipping
+- `obs.Obs.Logger()` accessor to expose the structured logger to callers
+- `Config.Validate()` rejects `SeqURL` that does not start with `https://` when `DevMode` is false
+- `Config.Validate()` rejects `DevMode=true` when `Environment` is `"production"` (case-insensitive)
 
 ## [0.1.0] - 2026-04-06
 

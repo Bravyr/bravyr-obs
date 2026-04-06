@@ -5,10 +5,12 @@ package obs
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 
 	"github.com/bravyr/bravyr-obs/config"
 	"github.com/bravyr/bravyr-obs/health"
+	obslog "github.com/bravyr/bravyr-obs/log"
 )
 
 // Config is the top-level configuration for the observability stack.
@@ -17,7 +19,8 @@ type Config = config.Config
 // Obs holds the initialized observability providers and exposes
 // middleware and health check handlers as methods.
 type Obs struct {
-	cfg Config
+	cfg    Config
+	logger *obslog.Logger
 }
 
 // Init initializes logging, tracing, and metrics based on the provided
@@ -27,12 +30,29 @@ func Init(cfg Config) (*Obs, error) {
 		return nil, err
 	}
 
-	return &Obs{cfg: cfg}, nil
+	logger, err := obslog.New(obslog.Config{
+		Level:       cfg.LogLevel,
+		SeqURL:      cfg.SeqURL,
+		SeqAPIKey:   cfg.SeqAPIKey,
+		ServiceName: cfg.ServiceName,
+		DevMode:     cfg.DevMode,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("log init: %w", err)
+	}
+
+	return &Obs{cfg: cfg, logger: logger}, nil
 }
+
+// Logger returns the structured logger. It is safe to use from multiple
+// goroutines. The returned pointer is valid until Shutdown is called.
+func (o *Obs) Logger() *obslog.Logger { return o.logger }
 
 // Shutdown flushes all telemetry pipelines and releases resources.
 func (o *Obs) Shutdown(ctx context.Context) {
-	// Phases 1-2: flush log, trace, and metrics pipelines.
+	if o.logger != nil {
+		_ = o.logger.Shutdown(ctx)
+	}
 }
 
 // Middleware returns an http.Handler middleware that adds request logging,
