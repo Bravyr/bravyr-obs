@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-04-06
+
+### Added
+
+- Prometheus metrics registry using a custom (non-global) `prometheus.Registry` for test isolation (`metrics` package)
+- Built-in HTTP instrumentation: `http_request_duration_seconds` histogram, `http_requests_total` counter, `http_active_requests` gauge — all partitioned by `method`, `path`, and `status_code`
+- `metrics.HTTPMiddleware()` records per-request duration, total count, and active connections; path labels use Chi's `RoutePattern()` to prevent label cardinality explosion from path parameters
+- `metrics.NewCounter()` and `metrics.NewHistogram()` helpers for custom business metrics scoped to the same isolated registry
+- `/metrics` endpoint handler via `metrics.Handler()` (Prometheus text exposition format)
+- `obs.Metrics()` accessor to retrieve the registry from the root facade
+- `obs.MetricsHandler()` convenience method returning the Prometheus handler directly
+- `MetricsPrefix` field in `config.Config` (env `OBS_METRICS_PREFIX`, default `""`) — prepended to all metric names with an underscore separator
+
+### Changed
+
+- `obs.Shutdown()` now calls `metrics.Shutdown()` between tracer and logger shutdown for consistent ordering across all providers
+
 ## [0.3.0] - 2026-04-06
 
 ### Added

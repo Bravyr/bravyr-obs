@@ -245,3 +245,27 @@ func TestValidate_sampleRateInvalid(t *testing.T) {
 		}
 	}
 }
+
+func TestValidate_metricsPrefix(t *testing.T) {
+	cases := []struct {
+		name   string
+		prefix string
+	}{
+		{"empty prefix is valid", ""},
+		{"non-empty prefix is valid", "myapp"},
+		{"prefix with underscores is valid", "my_app"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := Config{
+				ServiceName:   "test-svc",
+				LogLevel:      "info",
+				MetricsPrefix: tc.prefix,
+			}
+			if err := cfg.Validate(); err != nil {
+				t.Fatalf("expected no error for MetricsPrefix %q, got: %v", tc.prefix, err)
+			}
+		})
+	}
+}
