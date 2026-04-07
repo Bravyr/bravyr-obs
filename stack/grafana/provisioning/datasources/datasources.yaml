@@ -1,0 +1,65 @@
+apiVersion: 1
+
+# ---------------------------------------------------------------------------
+# Grafana data source provisioning.
+# All sources are auto-created on startup; manual setup is not required.
+#
+# Seq data source requires the datalust-seq-datasource plugin.
+# GF_INSTALL_PLUGINS=datalust-seq-datasource is set in docker-compose.yml —
+# Grafana downloads it on first startup. Subsequent restarts use the cached
+# plugin from the grafana_data volume.
+# ---------------------------------------------------------------------------
+
+datasources:
+
+  # Prometheus — primary metrics source
+  - name: Prometheus
+    type: prometheus
+    uid: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    jsonData:
+      timeInterval: "15s"
+      queryTimeout: "60s"
+      httpMethod: "POST"
+      exemplarTraceIdDestinations:
+        - name: trace_id
+          datasourceUid: tempo   # links Prometheus exemplars to Tempo traces
+
+  # Tempo — distributed trace storage
+  - name: Tempo
+    type: tempo
+    uid: tempo
+    access: proxy
+    url: http://tempo:3200
+    jsonData:
+      httpMethod: "GET"
+      serviceMap:
+        datasourceUid: prometheus
+      nodeGraph:
+        enabled: true
+      traceQuery:
+        timeShiftEnabled: true
+        spanStartTimeShift: "1h"
+        spanEndTimeShift: "1h"
+      lokiSearch:
+        datasourceUid: ""   # no Loki in this stack
+      tracesToLogsV2:
+        datasourceUid: ""   # no Loki; use Seq UI for log-to-trace correlation
+      tracesToMetrics:
+        datasourceUid: prometheus
+        tags:
+          - key: service.name
+            value: service
+
+  # Seq — structured log aggregation
+  # Requires: GF_INSTALL_PLUGINS=datalust-seq-datasource (set in compose)
+  # Plugin docs: https://github.com/datalust/grafana-seq-datasource
+  - name: Seq
+    type: datalust-seq-datasource
+    uid: seq
+    access: proxy
+    url: http://seq:80
+    jsonData:
+      apiKey: ""   # set to ${SEQ_API_KEY} if authentication is enabled in Seq

@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- `stack/docker-compose.yml` — full monitoring stack: Seq 2025.2, OTel Collector contrib 0.123.0, Tempo 2.7.2, Prometheus v3.3.1, postgres-exporter v0.17.1, Grafana 11.6.1; all services on a shared `monitoring` bridge network with named volumes for data persistence
+- `stack/docker-compose.dev.yml` — lightweight dev stack (Seq + OTel Collector + Prometheus only) for fast local iteration
+- `stack/prometheus/prometheus.yml` — scrape config targeting Prometheus self, OTel Collector self-metrics, postgres-exporter, and Go services on `host.docker.internal`; includes template for adding additional services
+- `stack/otel-collector/config.yaml` — OTLP gRPC/HTTP receivers, memory_limiter + batch processors, OTLP exporter to Tempo, Prometheus exporter on port 8889, debug exporter; self-metrics on port 8888
+- `stack/tempo/config.yaml` — single-node Tempo config with local filesystem storage, 72h trace retention, OTLP receiver, remote_write back to Prometheus for span metrics
+- `stack/grafana/provisioning/datasources/datasources.yaml` — auto-provisioned Prometheus, Tempo, and Seq data sources; Prometheus exemplar linking wired to Tempo UID
+- `stack/grafana/provisioning/dashboards/dashboards.yaml` — dashboard provider pointing to `/var/lib/grafana/dashboards`
+- `stack/grafana/dashboards/http-overview.json` — HTTP overview dashboard with panels: request rate by route, 4xx/5xx error rate %, p50/p95/p99 latency, active connections gauge, summary stat row, p95 latency by route; `$metric_prefix` template variable supports `OBS_METRICS_PREFIX`
+- `stack/.env.example` — documents required `POSTGRES_DSN`, optional `SEQ_API_KEY`, and Grafana admin credentials
+- All ports bound to 127.0.0.1 (loopback only) to prevent network exposure
+- Prometheus, Tempo, and postgres-exporter ports not exposed to host (internal Docker network only)
+
 ## [0.5.0] - 2026-04-07
 
 ### Added

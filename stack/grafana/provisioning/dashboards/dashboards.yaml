@@ -1,0 +1,12 @@
+apiVersion: 1
+
+providers:
+  - name: "bravyr-obs"
+    orgId: 1
+    type: file
+    disableDeletion: true     # dashboards managed as code — edit the JSON file, not the UI
+    updateIntervalSeconds: 30 # poll for file changes every 30s
+    allowUiUpdates: false     # prevent UI modifications to provisioned dashboards
+    options:
+      path: /var/lib/grafana/dashboards
+      foldersFromFilesStructure: false

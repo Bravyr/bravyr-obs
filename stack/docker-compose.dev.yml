@@ -1,0 +1,77 @@
+# Lightweight dev stack — Seq + OTel Collector + Prometheus only.
+# Tempo and Grafana are excluded to keep startup fast.
+# Use: docker compose -f docker-compose.dev.yml up
+#
+# EULA REQUIREMENT: Seq requires ACCEPT_EULA=Y. By starting this stack you
+# accept the Seq End-User License Agreement: https://datalust.co/doc/seq-eula
+#
+# Seq UI:       http://localhost:5341
+# Prometheus:   http://localhost:9090
+# OTel gRPC:    localhost:4317
+#
+# Go service env vars for local development:
+#   OBS_SEQ_URL=http://localhost:5341
+#   OBS_OTLP_ENDPOINT=localhost:4317
+#   OBS_DEV_MODE=true
+
+networks:
+  monitoring:
+    driver: bridge
+
+volumes:
+  seq_data_dev:
+  prometheus_data_dev:
+
+services:
+
+  seq:
+    image: datalust/seq:2025.2
+    container_name: bravyr_seq_dev
+    restart: unless-stopped
+    environment:
+      ACCEPT_EULA: "Y"
+    ports:
+      - "127.0.0.1:5341:80"
+    volumes:
+      - seq_data_dev:/data
+    networks:
+      - monitoring
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost/api || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.123.0
+    container_name: bravyr_otel_collector_dev
+    restart: unless-stopped
+    command: ["--config=/etc/otelcol/config.yaml"]
+    volumes:
+      - ./otel-collector/config.yaml:/etc/otelcol/config.yaml:ro
+    ports:
+      - "127.0.0.1:4317:4317"
+      - "127.0.0.1:4318:4318"
+    networks:
+      - monitoring
+    depends_on:
+      prometheus:
+        condition: service_started
+
+  prometheus:
+    image: prom/prometheus:v3.3.1
+    container_name: bravyr_prometheus_dev
+    restart: unless-stopped
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=7d"
+      - "--web.enable-lifecycle"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data_dev:/prometheus
+    ports:
+      - "127.0.0.1:9090:9090"
+    networks:
+      - monitoring

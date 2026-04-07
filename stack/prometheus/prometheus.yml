@@ -1,0 +1,66 @@
+global:
+  scrape_interval: 15s       # How frequently to scrape targets
+  evaluation_interval: 15s   # How frequently to evaluate rules
+  scrape_timeout: 10s
+
+  # Labels added to every time series scraped by this Prometheus instance.
+  # Useful when federating multiple Prometheus instances into a central store.
+  external_labels:
+    cluster: "local"
+    env: "development"
+
+# ---------------------------------------------------------------------------
+# Scrape configurations
+# ---------------------------------------------------------------------------
+scrape_configs:
+
+  # Prometheus self-monitoring
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  # OTel Collector self-metrics
+  # The collector exposes its own health/performance metrics on port 8888.
+  - job_name: "otel-collector"
+    static_configs:
+      - targets: ["otel-collector:8888"]
+
+  # postgres-exporter
+  - job_name: "postgres"
+    static_configs:
+      - targets: ["postgres-exporter:9187"]
+    metric_relabel_configs:
+      # Drop high-cardinality per-query metrics that are rarely useful
+      - source_labels: [__name__]
+        regex: "pg_stat_activity_.*"
+        action: drop
+
+  # ---------------------------------------------------------------------------
+  # Go services running on the host machine (outside Docker).
+  # Each service must expose a /metrics endpoint in Prometheus text format.
+  # OBS_METRICS_PREFIX in bravyr-obs adds a prefix to all metric names —
+  # if you set a prefix, update the metric names in your Grafana dashboards.
+  #
+  # host.docker.internal resolves to the host machine from inside a container
+  # on Docker Desktop (Mac/Windows). On Linux, add --add-host=host.docker.internal:host-gateway
+  # to the prometheus service or use the host network mode.
+  # ---------------------------------------------------------------------------
+  - job_name: "go-services"
+    metrics_path: "/metrics"
+    static_configs:
+      - targets:
+          - "host.docker.internal:8080"   # default Go service port — change as needed
+        labels:
+          service: "my-service"           # replaces with your actual service name
+
+  # ---------------------------------------------------------------------------
+  # Template for adding additional Go services:
+  #
+  # - job_name: "my-other-service"
+  #   metrics_path: "/metrics"
+  #   static_configs:
+  #     - targets:
+  #         - "host.docker.internal:8081"
+  #       labels:
+  #         service: "my-other-service"
+  # ---------------------------------------------------------------------------
