@@ -39,7 +39,7 @@ rebuilding anything.
 ### Seq EULA
 
 Seq requires `ACCEPT_EULA=Y` as an environment variable. This is set in both
-`docker-compose.yml` and `docker-compose.dev.yml`. Both files include a comment
+`docker-compose.yaml` and `docker-compose.dev.yaml`. Both files include a comment
 at the top noting the EULA requirement and linking to https://datalust.co/doc/seq-eula.
 
 ### OTel Collector Pipeline
@@ -88,8 +88,8 @@ This avoids maintaining two sets of PromQL queries.
 
 ### Dev Stack vs Full Stack
 
-`docker-compose.dev.yml` omits Tempo and Grafana to keep startup time under 10 seconds
-and memory usage under 512MB. The full stack (`docker-compose.yml`) is used when
+`docker-compose.dev.yaml` omits Tempo and Grafana to keep startup time under 10 seconds
+and memory usage under 512MB. The full stack (`docker-compose.yaml`) is used when
 trace visualization or Grafana dashboards are needed. Both stacks use the same
 `otel-collector/config.yaml` and `prometheus/prometheus.yml` — no duplication.
 
@@ -98,8 +98,8 @@ trace visualization or Grafana dashboards are needed. Both stacks use the same
 ```
 stack/
 ├── .env.example
-├── docker-compose.yml
-├── docker-compose.dev.yml
+├── docker-compose.yaml
+├── docker-compose.dev.yaml
 ├── otel-collector/
 │   └── config.yaml
 ├── prometheus/
@@ -122,4 +122,4 @@ stack/
 - TLS on OTel Collector receiver for production use
 - Grafana dashboard for Postgres metrics (pg_stat_activity, replication lag, cache hit rate)
 - Loki integration for container log aggregation (currently Seq handles structured app logs only)
-- docker-compose.yml `profiles` to selectively enable postgres-exporter when a DSN is available
+- docker-compose.yaml `profiles` to selectively enable postgres-exporter when a DSN is available

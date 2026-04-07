@@ -1,6 +1,6 @@
 # Lightweight dev stack — OTel Collector + Prometheus only.
 # Tempo, Loki, and Grafana are excluded to keep startup fast.
-# Use: docker compose -f docker-compose.dev.yml up
+# Use: docker compose -f docker-compose.dev.yaml up
 #
 # Prometheus:   http://localhost:9090
 # OTel gRPC:    localhost:4317

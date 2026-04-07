@@ -39,7 +39,7 @@ and Tempo `tracesToLogsV2` wire log-to-trace and trace-to-log navigation.
 
 - Docker Desktop 4.x or later (Mac/Windows) or Docker Engine + Compose plugin (Linux)
 - On Linux only: add `--add-host=host.docker.internal:host-gateway` to the
-  prometheus service in `docker-compose.yml` if your Go services run on the host
+  prometheus service in `docker-compose.yaml` if your Go services run on the host
 - Promtail requires access to the Docker socket (`/var/run/docker.sock`) and
   container log directory (`/var/lib/docker/containers`)
 
@@ -58,7 +58,7 @@ docker compose --env-file .env up -d
 
 ```bash
 cd stack
-docker compose -f docker-compose.dev.yml up -d
+docker compose -f docker-compose.dev.yaml up -d
 ```
 
 In dev mode, the Go service writes human-readable console output to stdout.
@@ -104,7 +104,7 @@ stack is backend-agnostic — it receives and stores telemetry, not produce it.
 Add exporters to your **application's** Docker Compose file:
 
 ```yaml
-# In your app's docker-compose.yml:
+# In your app's docker-compose.yaml:
 postgres-exporter:
   image: prometheuscommunity/postgres-exporter:v0.17.1
   environment:
