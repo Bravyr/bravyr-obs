@@ -255,9 +255,10 @@ The built-in HTTP metrics are:
 | Distributed tracing (OpenTelemetry OTLP) | `trace` | Available |
 | Prometheus metrics | `metrics` | Available |
 | Chi middleware bundle | `middleware` | Available (tracing + metrics + logging, trace-ID correlation) |
-| Health check endpoint | `health` | Available (typed checkers: Postgres, Redis) |
+| Health check endpoint | `health` | Available (typed checkers: Postgres, Redis, Temporal) |
+| pgx database query tracing | `pgxtrace` | Available (wraps otelpgx, PII-safe by default) |
 | Environment-based configuration | `config` | Available |
-| Local monitoring stack (Docker Compose) | `stack` | Planned |
+| Local monitoring stack (Docker Compose) | `stack` | Available (LGTM: Loki, Grafana, Tempo, Prometheus) |
 
 ## Configuration
 
@@ -283,7 +284,8 @@ github.com/bravyr/bravyr-obs
 ├── trace/          OpenTelemetry tracer provider setup
 ├── metrics/        Prometheus metrics registry and handler
 ├── middleware/     Chi middleware bundle (logging, tracing, metrics)
-├── health/         Health check helpers (Checker builder, PgxCheck, RedisCheck)
+├── health/         Health check helpers (Checker builder, PgxCheck, RedisCheck, TemporalCheck)
+├── pgxtrace/       pgx database query tracing via otelpgx
 └── stack/          Docker Compose monitoring stack
 ```
 

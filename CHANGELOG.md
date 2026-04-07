@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `pgxtrace` sub-package for automatic pgx database query span instrumentation via otelpgx
 - `CachedCheck()` wrapper that caches healthy results for a configurable TTL to prevent health check amplification
 - OTLPEndpoint validation against loopback and link-local IP addresses in non-dev mode
 - `TemporalCheck()` health helper with `TemporalChecker` interface
