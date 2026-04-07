@@ -3,6 +3,8 @@
 Local Docker Compose monitoring stack for bravyr-obs. Provides log aggregation,
 distributed tracing, metrics scraping, and dashboards.
 
+For production deployment on Coolify, see [Coolify Deployment Guide](../docs/coolify-deployment.md).
+
 ## Services
 
 | Service           | Image                                    | Purpose                              | Port  |
