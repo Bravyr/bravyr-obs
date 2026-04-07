@@ -9,12 +9,12 @@ For production deployment on Coolify, see [Coolify Deployment Guide](../docs/coo
 
 | Service           | Image                                    | Purpose                              | Port  |
 |-------------------|------------------------------------------|--------------------------------------|-------|
-| Loki              | grafana/loki:3.5.0                       | Log aggregation backend              | 3100  |
-| Promtail          | grafana/promtail:3.5.0                   | Log collector (Docker stdout → Loki) | 9080  |
-| OTel Collector    | otel/opentelemetry-collector-contrib     | OTLP receiver, trace/metrics fanout  | 4317  |
-| Tempo             | grafana/tempo:2.7.2                      | Distributed trace storage            | 3200  |
-| Prometheus        | prom/prometheus:v3.3.1                   | Metrics scraping and storage         | 9090  |
-| Grafana           | grafana/grafana:11.6.1                   | Dashboards                           | 3000  |
+| Loki              | grafana/loki:3.7.1                       | Log aggregation backend              | 3100  |
+| Alloy             | grafana/alloy:v1.14.0                    | Log collector (Docker stdout → Loki) | —     |
+| OTel Collector    | otel/opentelemetry-collector-contrib:0.149.0 | OTLP receiver, trace/metrics fanout | 4317  |
+| Tempo             | grafana/tempo:2.10.3                     | Distributed trace storage            | 3200  |
+| Prometheus        | prom/prometheus:v3.11.0                  | Metrics scraping and storage         | 9090  |
+| Grafana           | grafana/grafana:12.4.2                   | Dashboards                           | 3000  |
 
 ## Architecture
 
@@ -22,7 +22,7 @@ For production deployment on Coolify, see [Coolify Deployment Guide](../docs/coo
 Go service stdout (JSON)
         │
         ▼
-   [Promtail]  ── scrapes container stdout via Docker socket
+   [Alloy]  ── scrapes container stdout via Docker socket
         │
         ▼
      [Loki]   ── stores log streams, indexed by labels (service, level)
@@ -40,7 +40,7 @@ and Tempo `tracesToLogsV2` wire log-to-trace and trace-to-log navigation.
 - Docker Desktop 4.x or later (Mac/Windows) or Docker Engine + Compose plugin (Linux)
 - On Linux only: add `--add-host=host.docker.internal:host-gateway` to the
   prometheus service in `docker-compose.yaml` if your Go services run on the host
-- Promtail requires access to the Docker socket (`/var/run/docker.sock`) and
+- Alloy requires access to the Docker socket (`/var/run/docker.sock`) and
   container log directory (`/var/lib/docker/containers`)
 
 ## Quick Start
@@ -84,7 +84,7 @@ Prometheus scrapes `/metrics` from `host.docker.internal:8080` by default. Updat
 `prometheus/prometheus.yml` with the actual port your service listens on.
 
 In production (non-dev mode), the Go library writes structured JSON to stdout.
-Promtail collects those logs via the Docker socket and forwards them to Loki.
+Alloy collects those logs via the Docker socket and forwards them to Loki.
 No additional configuration is required in the Go service.
 
 ## Adding More Go Services
@@ -92,7 +92,7 @@ No additional configuration is required in the Go service.
 Edit `stack/prometheus/prometheus.yml` and add a new scrape config under the
 `scrape_configs` section. A template is included in the file as a comment.
 
-Promtail automatically discovers all running containers via the Docker socket.
+Alloy automatically discovers all running containers via the Docker socket.
 Logs from any container are forwarded to Loki with `container` and `service`
 labels derived from the container name and `service` label respectively.
 
