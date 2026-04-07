@@ -257,6 +257,8 @@ The built-in HTTP metrics are:
 | Chi middleware bundle | `middleware` | Available (tracing + metrics + logging, trace-ID correlation) |
 | Health check endpoint | `health` | Available (typed checkers: Postgres, Redis, Temporal) |
 | pgx database query tracing | `pgxtrace` | Available (wraps otelpgx, PII-safe by default) |
+| Redis command tracing | `redistrace` | Available (wraps redisotel, db.statement off by default) |
+| Temporal workflow/activity tracing | `temporaltrace` | Available (wraps Temporal OTel contrib interceptor) |
 | Environment-based configuration | `config` | Available |
 | Local monitoring stack (Docker Compose) | `stack` | Available (LGTM: Loki, Grafana, Tempo, Prometheus) |
 
@@ -286,6 +288,8 @@ github.com/bravyr/bravyr-obs
 ├── middleware/     Chi middleware bundle (logging, tracing, metrics)
 ├── health/         Health check helpers (Checker builder, PgxCheck, RedisCheck, TemporalCheck)
 ├── pgxtrace/       pgx database query tracing via otelpgx
+├── redistrace/     Redis command tracing via redisotel
+├── temporaltrace/  Temporal workflow/activity tracing
 └── stack/          Docker Compose monitoring stack
 ```
 

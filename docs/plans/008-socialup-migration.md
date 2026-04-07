@@ -179,7 +179,38 @@ pool, _ := pgxpool.NewWithConfig(ctx, poolConfig)
 
 Every SQL query will appear as a child span in traces with parameterized SQL.
 
-### Step 10: Add custom business metrics
+### Step 10: Add Redis tracing
+
+```go
+import "github.com/bravyr/bravyr-obs/redistrace"
+
+// After creating the Redis client:
+if err := redistrace.Instrument(rdb); err != nil {
+    logger.Error().Err(err).Msg("failed to instrument Redis tracing")
+}
+```
+
+All Redis commands will appear as child spans in traces. `db.statement` is redacted by default — do not enable it in production because command arguments can contain session tokens and user data.
+
+### Step 11: Add Temporal tracing
+
+```go
+import "github.com/bravyr/bravyr-obs/temporaltrace"
+
+i, err := temporaltrace.NewInterceptor()
+if err != nil {
+    logger.Error().Err(err).Msg("failed to create Temporal tracing interceptor")
+    // non-fatal: proceed without tracing
+}
+temporalClient, err = client.Dial(client.Options{
+    HostPort:     cfg.TemporalAddress,
+    Namespace:    cfg.TemporalNamespace,
+    Logger:       newTemporalLogger(o.Logger()),
+    Interceptors: []interceptor.ClientInterceptor{i},
+})
+```
+
+### Step 12: Add custom business metrics
 
 ```go
 // In a metrics.go or wherever appropriate:
@@ -188,7 +219,7 @@ inboxSynced, _ := o.Metrics().NewCounter("inbox_messages_synced_total", "Inbox m
 aiResponses, _ := o.Metrics().NewHistogram("ai_response_seconds", "AI response time", []string{"model"}, nil)
 ```
 
-### Step 10: Update Coolify compose files
+### Step 13: Update Coolify compose files
 
 In `coolify/staging.yml` and `coolify/production.yml`:
 
@@ -206,7 +237,7 @@ In `coolify/staging.yml` and `coolify/production.yml`:
    ```
 5. Reference the external bravyr-obs monitoring stack (deployed separately)
 
-### Step 11: Deploy monitoring stack
+### Step 14: Deploy monitoring stack
 
 Deploy the bravyr-obs monitoring stack to the same Docker network:
 
@@ -216,7 +247,7 @@ cp .env.example .env  # configure GRAFANA_ADMIN_PASSWORD
 docker compose up -d
 ```
 
-### Step 12: Verify
+### Step 15: Verify
 
 1. Logs appear in Grafana → Explore → Loki: `{service="socialup-api"}`
 2. Traces appear in Grafana → Explore → Tempo: search by service name
