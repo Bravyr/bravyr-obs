@@ -4,6 +4,8 @@ package health
 import (
 	"context"
 	"errors"
+	"sync"
+	"time"
 )
 
 // PingChecker is satisfied by *pgxpool.Pool, *pgx.Conn, and any other type
@@ -44,6 +46,37 @@ func RedisCheck(c RedisChecker) CheckFunc {
 			return errors.New("redis ping returned nil result")
 		}
 		return res.Err()
+	}
+}
+
+// CachedCheck wraps a CheckFunc to cache successful results for the given TTL.
+// Healthy results (nil error) are cached — subsequent calls within the TTL
+// return nil without invoking fn. Errors are never cached, ensuring failures
+// are detected immediately on the next poll. A zero or negative TTL disables
+// caching (passthrough).
+func CachedCheck(fn CheckFunc, ttl time.Duration) CheckFunc {
+	if ttl <= 0 {
+		return fn
+	}
+	var (
+		mu     sync.Mutex
+		lastOK time.Time
+	)
+	return func(ctx context.Context) error {
+		mu.Lock()
+		if time.Since(lastOK) < ttl {
+			mu.Unlock()
+			return nil
+		}
+		mu.Unlock()
+
+		err := fn(ctx)
+		if err == nil {
+			mu.Lock()
+			lastOK = time.Now()
+			mu.Unlock()
+		}
+		return err
 	}
 }
 

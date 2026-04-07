@@ -3,7 +3,9 @@ package health
 import (
 	"context"
 	"errors"
+	"sync/atomic"
 	"testing"
+	"time"
 )
 
 // mockPinger implements PingChecker for testing PgxCheck.
@@ -143,3 +145,104 @@ func TestTemporalCheck_respectsContext(t *testing.T) {
 type ctxAwareTemporalChecker struct{}
 
 func (c *ctxAwareTemporalChecker) CheckHealth(ctx context.Context) error { return ctx.Err() }
+
+// --- CachedCheck tests ---
+
+func TestCachedCheck_returnsNilWithinTTL(t *testing.T) {
+	var calls atomic.Int32
+	fn := func(ctx context.Context) error {
+		calls.Add(1)
+		return nil
+	}
+
+	cached := CachedCheck(fn, 100*time.Millisecond)
+
+	if err := cached(context.Background()); err != nil {
+		t.Fatalf("first call: %v", err)
+	}
+	if err := cached(context.Background()); err != nil {
+		t.Fatalf("second call: %v", err)
+	}
+
+	if got := calls.Load(); got != 1 {
+		t.Fatalf("expected 1 call within TTL, got %d", got)
+	}
+}
+
+func TestCachedCheck_callsAfterTTLExpires(t *testing.T) {
+	var calls atomic.Int32
+	fn := func(ctx context.Context) error {
+		calls.Add(1)
+		return nil
+	}
+
+	cached := CachedCheck(fn, 50*time.Millisecond)
+
+	_ = cached(context.Background())
+	time.Sleep(60 * time.Millisecond)
+	_ = cached(context.Background())
+
+	if got := calls.Load(); got != 2 {
+		t.Fatalf("expected 2 calls after TTL, got %d", got)
+	}
+}
+
+func TestCachedCheck_neverCachesErrors(t *testing.T) {
+	var calls atomic.Int32
+	fn := func(ctx context.Context) error {
+		calls.Add(1)
+		return errors.New("down")
+	}
+
+	cached := CachedCheck(fn, 1*time.Second)
+
+	_ = cached(context.Background())
+	_ = cached(context.Background())
+	_ = cached(context.Background())
+
+	if got := calls.Load(); got != 3 {
+		t.Fatalf("expected 3 calls (errors not cached), got %d", got)
+	}
+}
+
+func TestCachedCheck_zeroTTLPassthrough(t *testing.T) {
+	var calls atomic.Int32
+	fn := func(ctx context.Context) error {
+		calls.Add(1)
+		return nil
+	}
+
+	cached := CachedCheck(fn, 0)
+
+	_ = cached(context.Background())
+	_ = cached(context.Background())
+
+	if got := calls.Load(); got != 2 {
+		t.Fatalf("expected 2 calls with zero TTL, got %d", got)
+	}
+}
+
+func TestCachedCheck_concurrentSafe(t *testing.T) {
+	var calls atomic.Int32
+	fn := func(ctx context.Context) error {
+		calls.Add(1)
+		return nil
+	}
+
+	cached := CachedCheck(fn, 1*time.Second)
+
+	done := make(chan struct{})
+	for range 10 {
+		go func() {
+			_ = cached(context.Background())
+			done <- struct{}{}
+		}()
+	}
+	for range 10 {
+		<-done
+	}
+
+	if got := calls.Load(); got > 2 {
+		t.Fatalf("expected at most 2 calls with caching, got %d", got)
+	}
+}
