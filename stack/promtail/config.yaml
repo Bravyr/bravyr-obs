@@ -27,5 +27,3 @@ scrape_configs:
       - labels:
           level:
           service:
-      - structured_metadata:
-          trace_id:
