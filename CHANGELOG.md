@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-04-07
+
+### Added
+
+- HTTP middleware bundle (`middleware.Bundle`) composing tracing, metrics, and request logging into a single Chi-compatible middleware
+- `middleware.BundleConfig` with per-component enable/disable flags (`Tracing`, `Logging`, `Metrics`)
+- `middleware.DefaultBundleConfig()` returns a config with all three components enabled
+- Request logging with structured fields: `method`, `path`, `status`, `duration`, `request_id`
+- Automatic `trace_id` and `span_id` injection into request log events when an OTel span is active, enabling log-to-trace correlation
+- `X-Request-ID` response header support: valid incoming UUIDs are forwarded; invalid or absent values are replaced with a freshly generated UUID
+- `metrics.Registry.RecordHTTPRequest()` — records duration histogram and request counter from a caller-supplied status code, enabling the bundle to share a single `statusWriter` rather than wrapping the response writer twice
+- `metrics.Registry.IncrementActiveRequests()` and `metrics.Registry.DecrementActiveRequests()` — allow the bundle to manage the active-requests gauge without accessing internal fields
+- `obs.MiddlewareWithConfig()` for selective component enablement
+
+### Changed
+
+- `obs.Middleware()` now returns the composed tracing + metrics + logging bundle (was trace-only)
+
 ## [0.4.0] - 2026-04-06
 
 ### Added

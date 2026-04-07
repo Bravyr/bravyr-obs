@@ -43,6 +43,7 @@ func main() {
 	defer o.Shutdown(context.Background())
 
 	router := chi.NewRouter()
+	// Single middleware call composes tracing + metrics + request logging.
 	router.Use(o.Middleware())
 	router.Get("/api/health", checker.Handler())
 
@@ -104,6 +105,52 @@ logger, err := obslog.New(obslog.Config{
 go get github.com/bravyr/bravyr-obs
 ```
 
+## Middleware Bundle
+
+`obs.Middleware()` returns a single Chi-compatible middleware that composes
+tracing, metrics, and request logging in one call. The middleware uses a
+shared `statusWriter` wrapper so the response code is captured exactly once,
+feeding both Prometheus labels and the structured log entry.
+
+```go
+router := chi.NewRouter()
+router.Use(o.Middleware()) // tracing + metrics + request logging
+
+// Selective enablement — disable tracing for a worker service:
+import obsmw "github.com/bravyr/bravyr-obs/middleware"
+
+router.Use(o.MiddlewareWithConfig(obsmw.BundleConfig{
+    Tracing: false,
+    Logging: true,
+    Metrics: true,
+}))
+```
+
+### Request logging
+
+Every completed request emits a structured log event with the following fields:
+
+| Field | Description |
+|---|---|
+| `method` | HTTP method (GET, POST, …) |
+| `path` | Chi route pattern (`/items/{id}`, not raw URL) |
+| `status` | HTTP status code written by the handler |
+| `duration` | Elapsed time in nanoseconds (zerolog `Dur`) |
+| `request_id` | Forwarded from `X-Request-ID` if a valid UUID; otherwise freshly generated |
+| `trace_id` | OTel trace ID — present when tracing is active |
+| `span_id` | OTel span ID — present when tracing is active |
+
+Requests with status ≥ 500 are logged at `error` level; all others at `info`.
+
+The bundle also sets the `X-Request-ID` response header so callers can correlate
+their own logs with server-side entries.
+
+### X-Request-ID validation
+
+Only well-formed UUIDs (RFC 4122 format) are accepted from incoming requests.
+Any other value — including empty strings or freeform text — is replaced with a
+freshly generated UUID. This prevents log injection from arbitrary header content.
+
 ## Tracing
 
 `obs.Init()` wires an OpenTelemetry tracer automatically. `obs.Middleware()` wraps
@@ -123,7 +170,7 @@ if err != nil {
 defer o.Shutdown(context.Background())
 
 router := chi.NewRouter()
-router.Use(o.Middleware()) // creates spans for every request
+router.Use(o.Middleware()) // tracing + metrics + request logging in one call
 
 // Optionally enrich spans with user and workspace identity.
 // Place after your auth middleware so the user is already resolved.
@@ -165,12 +212,8 @@ if err != nil {
 defer o.Shutdown(context.Background())
 
 router := chi.NewRouter()
-// HTTPMiddleware records duration, total count, and active connections.
-// Path labels use Chi route patterns (/items/{id}) not raw paths — this
-// prevents label cardinality from growing with every unique path parameter.
-router.Use(o.Metrics().HTTPMiddleware())
-
-// Serve the Prometheus text format at /metrics.
+// obs.Middleware() already records duration, count, and active connections.
+// Mount the Prometheus text format at /metrics separately:
 router.Get("/metrics", o.MetricsHandler().ServeHTTP)
 
 // Create custom business metrics scoped to the same isolated registry.
@@ -211,7 +254,7 @@ The built-in HTTP metrics are:
 | Structured logging (zerolog + Seq CLEF) | `log` | Available |
 | Distributed tracing (OpenTelemetry OTLP) | `trace` | Available |
 | Prometheus metrics | `metrics` | Available |
-| Chi middleware bundle | `middleware` | Planned |
+| Chi middleware bundle | `middleware` | Available (tracing + metrics + logging, trace-ID correlation) |
 | Health check endpoint | `health` | Available (typed checkers: Postgres, Redis) |
 | Environment-based configuration | `config` | Available |
 | Local monitoring stack (Docker Compose) | `stack` | Planned |
