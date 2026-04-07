@@ -3,6 +3,8 @@
 Opinionated observability library for Go services. Structured logging,
 distributed tracing, and Prometheus metrics in one `Init()` call.
 
+See the [Integration Guide](docs/integration-guide.md) for step-by-step setup instructions.
+
 ## Quick Start
 
 ```go

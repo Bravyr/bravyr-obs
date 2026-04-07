@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Integration guide (`docs/integration-guide.md`) — step-by-step setup for any Go service
+- socialup-api migration plan (`docs/plans/008-socialup-migration.md`)
 - `stack/loki/config.yaml` — single-node Loki 3.5.0 config with filesystem storage, 72h log retention, tsdb schema v13, and compaction
 - `stack/promtail/config.yaml` — Promtail 3.5.0 scrape config using Docker service discovery; extracts `level`, `service`, and `trace_id` from JSON log events; promotes `trace_id` to structured metadata for log-to-trace linking
 - Loki datasource in Grafana provisioning with a `TraceID` derived field wired to Tempo, enabling one-click navigation from a log line to its trace
