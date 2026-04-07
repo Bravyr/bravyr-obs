@@ -1,4 +1,6 @@
-// Package log provides a zerolog-based structured logger with Seq CLEF shipping.
+// Package log provides a zerolog-based structured logger that writes JSON to
+// stdout. Logs are collected from container stdout by Promtail and shipped to
+// Loki for aggregation.
 package log
 
 import (
@@ -19,13 +21,6 @@ type Config struct {
 	// Empty string defaults to "info".
 	Level string
 
-	// SeqURL is the base URL of the Seq server (e.g. "https://seq.example.com:5341").
-	// Leave empty to disable Seq shipping.
-	SeqURL string
-
-	// SeqAPIKey is the optional Seq ingest API key.
-	SeqAPIKey string
-
 	// ServiceName is attached as the "service" field on every log event.
 	ServiceName string
 
@@ -33,14 +28,13 @@ type Config struct {
 	DevMode bool
 }
 
-// Logger wraps zerolog.Logger with a lifecycle method for shutting down the
-// async Seq writer. All level methods return *zerolog.Event so callers can
-// chain fields in the standard zerolog style:
+// Logger wraps zerolog.Logger with a no-op Shutdown method for lifecycle
+// symmetry with other observability providers. All level methods return
+// *zerolog.Event so callers can chain fields in the standard zerolog style:
 //
 //	logger.Info().Str("key", "value").Msg("something happened")
 type Logger struct {
-	zl  zerolog.Logger
-	seq *seqWriter // nil when Seq shipping is disabled
+	zl zerolog.Logger
 }
 
 // New constructs a Logger from cfg. Returns an error if the level string is
@@ -51,32 +45,15 @@ func New(cfg Config) (*Logger, error) {
 		return nil, err
 	}
 
-	var writers []io.Writer
-
+	var w io.Writer
 	if cfg.DevMode {
 		// Pretty console writer for local development. Zerolog's ConsoleWriter
 		// formats each event as colourised, human-readable text.
-		writers = append(writers, zerolog.ConsoleWriter{Out: os.Stdout})
+		w = zerolog.ConsoleWriter{Out: os.Stdout}
 	} else {
-		// In non-dev mode, emit structured JSON to stderr so container runtimes
-		// and systemd can still capture logs even if Seq is misconfigured.
-		writers = append(writers, os.Stderr)
-	}
-
-	var sw *seqWriter
-	if cfg.SeqURL != "" {
-		sw = newSeqWriter(cfg.SeqURL, cfg.SeqAPIKey)
-		writers = append(writers, sw)
-	}
-
-	var w io.Writer
-	switch len(writers) {
-	case 0:
-		w = io.Discard
-	case 1:
-		w = writers[0]
-	default:
-		w = zerolog.MultiLevelWriter(writers...)
+		// Structured JSON to stdout so Promtail can scrape logs from container
+		// stdout and forward them to Loki.
+		w = os.Stdout
 	}
 
 	zl := zerolog.New(w).
@@ -86,7 +63,7 @@ func New(cfg Config) (*Logger, error) {
 		Timestamp().
 		Logger()
 
-	return &Logger{zl: zl, seq: sw}, nil
+	return &Logger{zl: zl}, nil
 }
 
 // Debug returns a *zerolog.Event for a debug-level message.
@@ -109,18 +86,14 @@ func (l *Logger) Fatal() *zerolog.Event { return l.zl.Fatal() }
 // additional fixed fields. Note that the resulting sub-logger is a raw
 // zerolog.Logger (not *Logger), so it does not carry Shutdown or typed
 // level methods. This is intentional — sub-loggers share the parent's
-// writers and are flushed when the parent is shut down.
+// writer and are collected alongside it.
 //
 //	reqLog := logger.With().Str("request_id", id).Logger()
 func (l *Logger) With() zerolog.Context { return l.zl.With() }
 
-// Shutdown flushes the Seq writer if one is configured and waits for the
-// background goroutine to finish. ctx is accepted for API symmetry but the
-// underlying close is unconditional — Seq drain is always attempted.
+// Shutdown is a no-op kept for API symmetry with other observability
+// providers. Logs are written synchronously to stdout; no flushing is needed.
 func (l *Logger) Shutdown(_ context.Context) error {
-	if l.seq != nil {
-		return l.seq.Close()
-	}
 	return nil
 }
 

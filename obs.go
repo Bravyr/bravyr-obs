@@ -1,6 +1,7 @@
 // Package obs is an opinionated observability library for Go services.
 // It provides structured logging, distributed tracing, and Prometheus metrics
-// in a single Init() call.
+// in a single Init() call. Logs are written as structured JSON to stdout and
+// collected by Promtail for shipping to Loki.
 package obs
 
 import (
@@ -37,8 +38,6 @@ func Init(cfg Config) (*Obs, error) {
 
 	logger, err := obslog.New(obslog.Config{
 		Level:       cfg.LogLevel,
-		SeqURL:      cfg.SeqURL,
-		SeqAPIKey:   cfg.SeqAPIKey,
 		ServiceName: cfg.ServiceName,
 		DevMode:     cfg.DevMode,
 	})
@@ -55,8 +54,7 @@ func Init(cfg Config) (*Obs, error) {
 	})
 	if err != nil {
 		// Logger was successfully constructed; shut it down before returning
-		// so the caller does not receive a partially-initialized Obs with a
-		// leaking Seq writer goroutine.
+		// so the caller does not receive a partially-initialized Obs.
 		_ = logger.Shutdown(context.Background())
 		return nil, fmt.Errorf("trace init: %w", err)
 	}

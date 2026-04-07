@@ -33,8 +33,8 @@ func withTestProvider(t *testing.T) *tracetest.SpanRecorder {
 	return sr
 }
 
-// newTestLogger builds a Logger that writes to a bytes buffer so tests can
-// inspect log output without needing a real Seq server.
+// newTestLogger builds a Logger in dev mode so tests can inspect console
+// output without requiring a running log backend.
 func newTestLogger(t *testing.T) *obslog.Logger {
 	t.Helper()
 	l, err := obslog.New(obslog.Config{ServiceName: "test", Level: "debug", DevMode: true})

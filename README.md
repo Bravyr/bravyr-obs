@@ -34,7 +34,6 @@ func main() {
 		ServiceName:  "socialup-api",
 		Environment:  "production",
 		LogLevel:     "info",
-		SeqURL:       "http://seq:5341",
 		OTLPEndpoint: "otel-collector:4317",
 	})
 	if err != nil {
@@ -61,8 +60,6 @@ o, err := obs.Init(obs.Config{
     ServiceName: "my-api",
     Environment: "production",
     LogLevel:    "info",
-    SeqURL:      "https://seq.internal:5341",
-    SeqAPIKey:   os.Getenv("SEQ_API_KEY"),
 })
 if err != nil {
     panic(err)
@@ -83,9 +80,10 @@ reqLog.Info().Msg("handling request")
 | Behaviour | Config |
 |---|---|
 | Human-readable console output | `DevMode: true` (development only) |
-| Ship logs to Seq | Set `SeqURL` (must be `https://` in non-dev mode) |
-| Authenticate to Seq | Set `SeqAPIKey` |
 | Minimum log level | `LogLevel: "debug"` / `"info"` / `"warn"` / `"error"` / `"fatal"` |
+
+In non-dev mode the logger writes structured JSON to stdout. Logs are collected
+from container stdout by Promtail and forwarded to Loki for aggregation.
 
 The `log` package can also be used standalone without the root facade:
 
@@ -95,7 +93,7 @@ import obslog "github.com/bravyr/bravyr-obs/log"
 logger, err := obslog.New(obslog.Config{
     ServiceName: "worker",
     Level:       "debug",
-    DevMode:     true,
+    DevMode:     true, // omit in production; JSON goes to stdout for Promtail
 })
 ```
 
@@ -251,7 +249,7 @@ The built-in HTTP metrics are:
 
 | Feature | Package | Status |
 |---|---|---|
-| Structured logging (zerolog + Seq CLEF) | `log` | Available |
+| Structured logging (zerolog, stdout JSON) | `log` | Available |
 | Distributed tracing (OpenTelemetry OTLP) | `trace` | Available |
 | Prometheus metrics | `metrics` | Available |
 | Chi middleware bundle | `middleware` | Available (tracing + metrics + logging, trace-ID correlation) |
@@ -267,9 +265,7 @@ All configuration fields can be set via struct literal or environment variables:
 |---|---|---|---|
 | `ServiceName` | `OBS_SERVICE_NAME` | *(required)* | Name of the service for logs/traces |
 | `Environment` | `OBS_ENVIRONMENT` | `development` | Deployment environment |
-| `LogLevel` | `OBS_LOG_LEVEL` | `info` | Log level (trace, debug, info, warn, error, fatal, panic) |
-| `SeqURL` | `OBS_SEQ_URL` | | Seq server URL for log shipping |
-| `SeqAPIKey` | `OBS_SEQ_API_KEY` | | Seq API key (separate from URL for security) |
+| `LogLevel` | `OBS_LOG_LEVEL` | `info` | Log level (debug, info, warn, error, fatal) |
 | `OTLPEndpoint` | `OBS_OTLP_ENDPOINT` | | OpenTelemetry Collector gRPC endpoint |
 | `SampleRate` | `OBS_SAMPLE_RATE` | `1.0` | Fraction of traces to sample (0.0–1.0); overridden to 1.0 when `DevMode` is true |
 | `DevMode` | `OBS_DEV_MODE` | `false` | Enable pretty console logging and always-sample tracing |
@@ -281,7 +277,7 @@ All configuration fields can be set via struct literal or environment variables:
 github.com/bravyr/bravyr-obs
 ├── obs.go          Root facade: Init() returns *Obs with Middleware(), HealthHandler()
 ├── config/         Environment-based configuration with validation
-├── log/            zerolog wrapper with Seq CLEF shipping
+├── log/            zerolog wrapper (JSON to stdout, collected by Promtail → Loki)
 ├── trace/          OpenTelemetry tracer provider setup
 ├── metrics/        Prometheus metrics registry and handler
 ├── middleware/     Chi middleware bundle (logging, tracing, metrics)

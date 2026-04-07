@@ -14,8 +14,6 @@ type Config struct {
 	ServiceName   string  `env:"OBS_SERVICE_NAME,required"`
 	Environment   string  `env:"OBS_ENVIRONMENT"    envDefault:"development"`
 	LogLevel      string  `env:"OBS_LOG_LEVEL"      envDefault:"info"`
-	SeqURL        string  `env:"OBS_SEQ_URL"`
-	SeqAPIKey     string  `env:"OBS_SEQ_API_KEY"`
 	OTLPEndpoint  string  `env:"OBS_OTLP_ENDPOINT"`
 	SampleRate    float64 `env:"OBS_SAMPLE_RATE"    envDefault:"1.0"`
 	DevMode       bool    `env:"OBS_DEV_MODE"       envDefault:"false"`
@@ -39,10 +37,6 @@ func (c Config) Validate() error {
 		errs = append(errs, fmt.Errorf("LogLevel %q is not valid", c.LogLevel))
 	}
 
-	if c.SeqURL != "" && !c.DevMode && !strings.HasPrefix(c.SeqURL, "https://") {
-		errs = append(errs, fmt.Errorf("SeqURL must use https:// in non-dev mode, got %q", c.SeqURL))
-	}
-
 	if c.DevMode && strings.EqualFold(c.Environment, "production") {
 		errs = append(errs, errors.New("DevMode must not be enabled in production environment"))
 	}
@@ -54,33 +48,20 @@ func (c Config) Validate() error {
 	return errors.Join(errs...)
 }
 
-// String returns a human-readable representation of the configuration
-// with sensitive fields redacted.
+// String returns a human-readable representation of the configuration.
 func (c Config) String() string {
-	apiKey := ""
-	if c.SeqAPIKey != "" {
-		apiKey = "***"
-	}
-
 	return fmt.Sprintf(
-		"Config{ServiceName:%q Environment:%q LogLevel:%q SeqURL:%q SeqAPIKey:%q OTLPEndpoint:%q SampleRate:%g DevMode:%t MetricsPrefix:%q}",
-		c.ServiceName, c.Environment, c.LogLevel, c.SeqURL, apiKey, c.OTLPEndpoint, c.SampleRate, c.DevMode, c.MetricsPrefix,
+		"Config{ServiceName:%q Environment:%q LogLevel:%q OTLPEndpoint:%q SampleRate:%g DevMode:%t MetricsPrefix:%q}",
+		c.ServiceName, c.Environment, c.LogLevel, c.OTLPEndpoint, c.SampleRate, c.DevMode, c.MetricsPrefix,
 	)
 }
 
-// MarshalJSON implements json.Marshaler with sensitive field redaction.
+// MarshalJSON implements json.Marshaler.
 func (c Config) MarshalJSON() ([]byte, error) {
-	apiKey := ""
-	if c.SeqAPIKey != "" {
-		apiKey = "***"
-	}
-
 	return json.Marshal(struct {
 		ServiceName   string  `json:"service_name"`
 		Environment   string  `json:"environment"`
 		LogLevel      string  `json:"log_level"`
-		SeqURL        string  `json:"seq_url"`
-		SeqAPIKey     string  `json:"seq_api_key"`
 		OTLPEndpoint  string  `json:"otlp_endpoint"`
 		SampleRate    float64 `json:"sample_rate"`
 		DevMode       bool    `json:"dev_mode"`
@@ -89,8 +70,6 @@ func (c Config) MarshalJSON() ([]byte, error) {
 		ServiceName:   c.ServiceName,
 		Environment:   c.Environment,
 		LogLevel:      c.LogLevel,
-		SeqURL:        c.SeqURL,
-		SeqAPIKey:     apiKey,
 		OTLPEndpoint:  c.OTLPEndpoint,
 		SampleRate:    c.SampleRate,
 		DevMode:       c.DevMode,

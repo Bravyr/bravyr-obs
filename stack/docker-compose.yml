@@ -1,13 +1,10 @@
 # Full production-like monitoring stack for bravyr-obs.
 #
-# EULA REQUIREMENT: Seq requires ACCEPT_EULA=Y. By starting this stack you
-# accept the Seq End-User License Agreement: https://datalust.co/doc/seq-eula
-#
-# Seq UI:       http://localhost:5341
 # Grafana:      http://localhost:3000
 # Prometheus:   (internal only, queried through Grafana)
 # OTel gRPC:    localhost:4317  (no browser UI)
 # Tempo:        (internal only, queried through Grafana)
+# Loki:         (internal only, queried through Grafana)
 #
 # Before starting: cp .env.example .env and fill in real values.
 
@@ -16,34 +13,13 @@ networks:
     driver: bridge
 
 volumes:
-  seq_data:
   prometheus_data:
   tempo_data:
   grafana_data:
+  loki_data:
+  promtail_positions:
 
 services:
-
-  # ---------------------------------------------------------------------------
-  # Seq — structured log aggregation (CLEF HTTP ingestion)
-  # ---------------------------------------------------------------------------
-  seq:
-    image: datalust/seq:2025.2
-    container_name: bravyr_seq
-    restart: unless-stopped
-    environment:
-      ACCEPT_EULA: "Y"
-    ports:
-      - "127.0.0.1:5341:80"   # Seq UI + CLEF ingestion API (loopback only)
-    volumes:
-      - seq_data:/data
-    networks:
-      - monitoring
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost/api || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 20s
 
   # ---------------------------------------------------------------------------
   # OpenTelemetry Collector — receives OTLP gRPC, fans out to Tempo + Prometheus
@@ -131,17 +107,55 @@ services:
       start_period: 10s
 
   # ---------------------------------------------------------------------------
-  # Grafana — dashboards wired to Prometheus, Tempo, and Seq
+  # Loki — log aggregation backend (receives logs from Promtail)
+  # ---------------------------------------------------------------------------
+  loki:
+    image: grafana/loki:3.5.0
+    container_name: bravyr_loki
+    restart: unless-stopped
+    command: ["-config.file=/etc/loki/config.yaml"]
+    volumes:
+      - ./loki/config.yaml:/etc/loki/config.yaml:ro
+      - loki_data:/loki
+    networks:
+      - monitoring
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3100/ready || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+  # ---------------------------------------------------------------------------
+  # Promtail — log collector (scrapes Docker container stdout, ships to Loki)
+  # ---------------------------------------------------------------------------
+  promtail:
+    image: grafana/promtail:3.5.0
+    container_name: bravyr_promtail
+    restart: unless-stopped
+    command: ["-config.file=/etc/promtail/config.yaml"]
+    volumes:
+      - ./promtail/config.yaml:/etc/promtail/config.yaml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - promtail_positions:/run/promtail
+    networks:
+      - monitoring
+    depends_on:
+      loki:
+        condition: service_healthy
+
+  # ---------------------------------------------------------------------------
+  # Grafana — dashboards wired to Prometheus, Tempo, and Loki
   # ---------------------------------------------------------------------------
   grafana:
     image: grafana/grafana:11.6.1
     container_name: bravyr_grafana
     restart: unless-stopped
     environment:
-      GF_SECURITY_ADMIN_PASSWORD: "${GRAFANA_ADMIN_PASSWORD:-admin}"
+      GF_SECURITY_ADMIN_PASSWORD: "${GRAFANA_ADMIN_PASSWORD:?GRAFANA_ADMIN_PASSWORD must be set in .env}"
       GF_SECURITY_ADMIN_USER: "${GRAFANA_ADMIN_USER:-admin}"
       GF_USERS_ALLOW_SIGN_UP: "false"
-      GF_INSTALL_PLUGINS: "datalust-seq-datasource"
       GF_SERVER_ROOT_URL: "http://localhost:3000"
       GF_ANALYTICS_REPORTING_ENABLED: "false"
     volumes:
@@ -157,7 +171,7 @@ services:
         condition: service_healthy
       tempo:
         condition: service_healthy
-      seq:
+      loki:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/health || exit 1"]

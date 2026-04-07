@@ -25,7 +25,7 @@ func newTestLogger(t *testing.T, buf *bytes.Buffer, cfg Config) *Logger {
 		Timestamp().
 		Logger()
 
-	return &Logger{zl: zl, seq: nil}
+	return &Logger{zl: zl}
 }
 
 func TestNew_devMode(t *testing.T) {
@@ -71,8 +71,8 @@ func TestNew_defaultLevel(t *testing.T) {
 
 func TestLogger_levels(t *testing.T) {
 	cases := []struct {
-		name     string
-		emit     func(l *Logger)
+		name      string
+		emit      func(l *Logger)
 		wantLevel string
 	}{
 		{"debug", func(l *Logger) { l.Debug().Msg("d") }, "debug"},
@@ -117,12 +117,12 @@ func TestLogger_with(t *testing.T) {
 	}
 }
 
-func TestShutdown_noSeq(t *testing.T) {
+func TestShutdown_noop(t *testing.T) {
 	l, err := New(Config{ServiceName: "test-svc", Level: "info"})
 	if err != nil {
 		t.Fatalf("New() returned error: %v", err)
 	}
-	// Must not panic or error when no Seq writer is configured.
+	// Shutdown is a no-op — must not panic or return an error.
 	if err := l.Shutdown(context.Background()); err != nil {
 		t.Fatalf("Shutdown() returned unexpected error: %v", err)
 	}
