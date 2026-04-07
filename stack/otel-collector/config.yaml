@@ -1,0 +1,96 @@
+# OpenTelemetry Collector configuration for bravyr-obs stack.
+#
+# Pipeline:
+#   OTLP gRPC (4317) ──► batch processor ──► Tempo  (traces)
+#                                         └──► Prometheus exporter (metrics, port 8889)
+#
+# The Go service sets OBS_OTLP_ENDPOINT=localhost:4317 (no scheme).
+# bravyr-obs trace.Init uses insecure gRPC when DevMode=true, which matches
+# the receiver config below (no TLS). In production, add TLS to the receiver
+# and set DevMode=false in the Go service.
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: "0.0.0.0:4317"
+        # No TLS here — dev stack only. For production, add:
+        # tls:
+        #   cert_file: /certs/collector.crt
+        #   key_file:  /certs/collector.key
+      http:
+        endpoint: "0.0.0.0:4318"
+
+processors:
+  # Batch processor reduces the number of outgoing connections and requests.
+  # send_batch_size: flush when this many spans/metrics accumulate.
+  # timeout: flush at least every N seconds regardless of batch size.
+  batch:
+    send_batch_size: 512
+    timeout: 5s
+
+  # Memory limiter prevents OOM by dropping telemetry when memory is tight.
+  # Place this first in every pipeline that receives external data.
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 256
+    spike_limit_mib: 64
+
+exporters:
+  # ---------------------------------------------------------------------------
+  # Tempo — receives traces via OTLP gRPC
+  # ---------------------------------------------------------------------------
+  otlp/tempo:
+    endpoint: "tempo:4317"
+    tls:
+      insecure: true   # Tempo runs without TLS in this stack
+
+  # ---------------------------------------------------------------------------
+  # Prometheus exporter — exposes metrics scraped from OTLP metric signals.
+  # Prometheus is configured to scrape this endpoint (see prometheus.yml).
+  # Note: this is separate from the collector's own /metrics on port 8888.
+  # ---------------------------------------------------------------------------
+  prometheus:
+    endpoint: "0.0.0.0:8889"
+    namespace: "otelcol"
+    send_timestamps: true
+    metric_expiration: 3m
+
+  # ---------------------------------------------------------------------------
+  # Debug exporter — logs telemetry to collector stdout. Useful during
+  # development. Remove or set verbosity to "basic" in production.
+  # ---------------------------------------------------------------------------
+  debug:
+    verbosity: "basic"
+    sampling_initial: 5
+    sampling_thereafter: 20
+
+extensions:
+  health_check:
+    endpoint: "0.0.0.0:13133"
+  pprof:
+    endpoint: "0.0.0.0:1777"
+  zpages:
+    endpoint: "0.0.0.0:55679"
+
+service:
+  extensions: [health_check, pprof, zpages]
+
+  pipelines:
+    # Trace pipeline: OTLP → batch → Tempo
+    traces:
+      receivers:  [otlp]
+      processors: [memory_limiter, batch]
+      exporters:  [otlp/tempo, debug]
+
+    # Metrics pipeline: OTLP → batch → Prometheus exporter
+    metrics:
+      receivers:  [otlp]
+      processors: [memory_limiter, batch]
+      exporters:  [prometheus]
+
+  telemetry:
+    logs:
+      level: "info"
+    metrics:
+      address: "0.0.0.0:8888"   # Collector self-metrics scraped by Prometheus
