@@ -130,6 +130,32 @@ Then add scrape targets to `stack/prometheus/prometheus.yml`:
     - targets: ["host.docker.internal:9121"]
 ```
 
+### node-exporter
+
+node-exporter monitors **host-level** metrics (CPU, memory, disk, network). It
+should run directly on the host machine, not inside Docker — running it in a
+container limits visibility to the container's cgroup.
+
+**If you use Coolify**: Coolify provides built-in server monitoring (CPU, memory,
+disk) via its dashboard. You likely don't need node-exporter unless you want
+those metrics **in Grafana** alongside application metrics for a unified view.
+
+**If you still want it**: Install as a systemd service on the VM:
+
+```bash
+# Ubuntu/Debian:
+sudo apt install prometheus-node-exporter
+# Verify: curl http://localhost:9100/metrics
+```
+
+Then add to `stack/prometheus/prometheus.yml`:
+
+```yaml
+- job_name: "node"
+  static_configs:
+    - targets: ["host.docker.internal:9100"]
+```
+
 ## Resetting State
 
 ```bash
