@@ -27,19 +27,28 @@ func (w *statusWriter) WriteHeader(code int) {
 	w.ResponseWriter.WriteHeader(code)
 }
 
+func (w *statusWriter) Write(b []byte) (int, error) {
+	if !w.wroteHeader {
+		w.status = http.StatusOK
+		w.wroteHeader = true
+	}
+	return w.ResponseWriter.Write(b)
+}
+
 // Unwrap returns the underlying ResponseWriter, enabling http.ResponseController
 // (Go 1.20+) to correctly delegate Flush, Hijack, and other optional interfaces.
 func (w *statusWriter) Unwrap() http.ResponseWriter {
 	return w.ResponseWriter
 }
 
-// HTTPMiddleware returns a Chi-compatible middleware that records HTTP request
-// duration, total request count, and active connections using the registry's
-// built-in Prometheus metrics.
+// HTTPMiddleware returns a standalone Chi-compatible middleware that records
+// HTTP request metrics. For most use cases, prefer middleware.Bundle which
+// composes tracing, metrics, and logging with a single response writer wrapper.
+// Do NOT use HTTPMiddleware and Bundle in the same middleware chain — they
+// will double-count metrics and double-wrap the response writer.
 //
 // Path labels use chi.RouteContext().RoutePattern() rather than r.URL.Path to
-// avoid unbounded label cardinality from path parameters (e.g. /items/1,
-// /items/2 ... become /items/{id} in the label).
+// avoid unbounded label cardinality from path parameters.
 //
 // Method labels are normalized to standard HTTP verbs to prevent cardinality
 // explosion from non-standard methods.

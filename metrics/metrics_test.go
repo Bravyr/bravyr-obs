@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 )
@@ -222,5 +223,47 @@ func TestShutdown_noOp(t *testing.T) {
 	// Shutdown must not return an error and must not block.
 	if err := reg.Shutdown(context.Background()); err != nil {
 		t.Fatalf("Shutdown() returned error: %v", err)
+	}
+}
+
+func TestRecordHTTPRequest(t *testing.T) {
+	reg, err := Init(Config{Prefix: "rec"})
+	if err != nil {
+		t.Fatalf("Init() returned error: %v", err)
+	}
+
+	reg.RecordHTTPRequest("GET", "/items/{id}", 200, 50*time.Millisecond)
+
+	mfs, err := reg.reg.Gather()
+	if err != nil {
+		t.Fatalf("Gather() returned error: %v", err)
+	}
+
+	foundDuration := false
+	foundTotal := false
+	for _, mf := range mfs {
+		switch mf.GetName() {
+		case "rec_http_request_duration_seconds":
+			foundDuration = true
+			m := mf.GetMetric()
+			if len(m) == 0 {
+				t.Error("expected at least one duration metric")
+			}
+		case "rec_http_requests_total":
+			foundTotal = true
+			m := mf.GetMetric()
+			if len(m) == 0 {
+				t.Error("expected at least one total metric")
+			} else if got := m[0].GetCounter().GetValue(); got != 1 {
+				t.Errorf("expected counter=1, got %g", got)
+			}
+		}
+	}
+
+	if !foundDuration {
+		t.Error("rec_http_request_duration_seconds not recorded")
+	}
+	if !foundTotal {
+		t.Error("rec_http_requests_total not recorded")
 	}
 }

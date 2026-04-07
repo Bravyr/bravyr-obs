@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/bravyr/bravyr-obs/health"
+	obsmw "github.com/bravyr/bravyr-obs/middleware"
 )
 
 func TestInit_valid(t *testing.T) {
@@ -142,6 +143,73 @@ func TestMetricsHandler(t *testing.T) {
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200 from MetricsHandler(), got %d", rec.Code)
+	}
+}
+
+func TestMiddleware_composedBundle(t *testing.T) {
+	o, err := Init(Config{ServiceName: "test-svc", LogLevel: "info"})
+	if err != nil {
+		t.Fatalf("Init failed: %v", err)
+	}
+	defer o.Shutdown(context.Background())
+
+	mw := o.Middleware()
+	if mw == nil {
+		t.Fatal("Middleware() returned nil")
+	}
+
+	called := false
+	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusOK)
+	})
+
+	handler := mw(inner)
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	handler.ServeHTTP(rec, req)
+
+	if !called {
+		t.Fatal("middleware did not call inner handler")
+	}
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+}
+
+func TestMiddlewareWithConfig_selective(t *testing.T) {
+	o, err := Init(Config{ServiceName: "test-svc", LogLevel: "info"})
+	if err != nil {
+		t.Fatalf("Init failed: %v", err)
+	}
+	defer o.Shutdown(context.Background())
+
+	// Disable tracing and metrics — only logging enabled.
+	mw := o.MiddlewareWithConfig(obsmw.BundleConfig{
+		Tracing: false,
+		Logging: true,
+		Metrics: false,
+	})
+	if mw == nil {
+		t.Fatal("MiddlewareWithConfig() returned nil")
+	}
+
+	called := false
+	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusNoContent)
+	})
+
+	handler := mw(inner)
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	handler.ServeHTTP(rec, req)
+
+	if !called {
+		t.Fatal("MiddlewareWithConfig handler did not call inner handler")
+	}
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d", rec.Code)
 	}
 }
 

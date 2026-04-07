@@ -6,6 +6,8 @@ package metrics
 import (
 	"context"
 	"fmt"
+	"strconv"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 )
@@ -105,6 +107,20 @@ func (r *Registry) NewHistogram(name, help string, labels []string, buckets []fl
 
 	return h, nil
 }
+
+// RecordHTTPRequest records HTTP request metrics. Used by the middleware bundle
+// to share a single status capture instead of wrapping the response writer twice.
+func (r *Registry) RecordHTTPRequest(method, path string, status int, duration time.Duration) {
+	statusCode := strconv.Itoa(status)
+	r.httpRequestDuration.WithLabelValues(method, path, statusCode).Observe(duration.Seconds())
+	r.httpRequestsTotal.WithLabelValues(method, path, statusCode).Inc()
+}
+
+// IncrementActiveRequests increments the active connections gauge.
+func (r *Registry) IncrementActiveRequests() { r.httpActiveRequests.Inc() }
+
+// DecrementActiveRequests decrements the active connections gauge.
+func (r *Registry) DecrementActiveRequests() { r.httpActiveRequests.Dec() }
 
 // Shutdown is a no-op and exists for API symmetry with the logger and tracer
 // providers so callers can treat all observability components uniformly.

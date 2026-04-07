@@ -12,6 +12,7 @@ import (
 	"github.com/bravyr/bravyr-obs/health"
 	obslog "github.com/bravyr/bravyr-obs/log"
 	obsmetrics "github.com/bravyr/bravyr-obs/metrics"
+	obsmw "github.com/bravyr/bravyr-obs/middleware"
 	obstrace "github.com/bravyr/bravyr-obs/trace"
 )
 
@@ -107,10 +108,16 @@ func (o *Obs) Shutdown(ctx context.Context) {
 	}
 }
 
-// Middleware returns an http.Handler middleware that adds trace propagation
-// to every request. The span is named after the matched Chi route pattern.
+// Middleware returns a composed middleware chain: tracing + metrics + request
+// logging. All three components are enabled by default.
 func (o *Obs) Middleware() func(http.Handler) http.Handler {
-	return obstrace.HTTPMiddleware(o.cfg.ServiceName)
+	return o.MiddlewareWithConfig(obsmw.DefaultBundleConfig())
+}
+
+// MiddlewareWithConfig returns a composed middleware chain with individual
+// components enabled/disabled per cfg.
+func (o *Obs) MiddlewareWithConfig(cfg obsmw.BundleConfig) func(http.Handler) http.Handler {
+	return obsmw.Bundle(o.cfg.ServiceName, o.logger, o.metrics, cfg)
 }
 
 // HealthHandler returns an http.HandlerFunc that executes the given named
