@@ -248,6 +248,30 @@ Tracing is automatic when `OTLPEndpoint` is set. Spans are exported via OTLP/gRP
 
 The global OTel TracerProvider is registered, so any OTel-compatible library (otelhttp, otelpgx, otelgrpc) will automatically use it.
 
+## Database Tracing (pgxtrace)
+
+Add automatic OTel spans to every pgx database query:
+
+```go
+import "github.com/bravyr/bravyr-obs/pgxtrace"
+
+connConfig, _ := pgx.ParseConfig(databaseURL)
+connConfig.Tracer = pgxtrace.NewTracer()
+pool, _ := pgxpool.NewWithConfig(ctx, poolConfig)
+```
+
+Each query creates a child span with:
+- `db.statement` — parameterized SQL (placeholders only, no values)
+- `db.system` — `postgresql`
+- `db.operation` — `SELECT`, `INSERT`, etc. (used as span name)
+
+### Include query parameters (dev only)
+
+```go
+// Only in development — query params can contain PII
+connConfig.Tracer = pgxtrace.NewTracer(pgxtrace.WithIncludeQueryParameters())
+```
+
 ## Monitoring Stack
 
 Start the full LGTM stack:

@@ -166,7 +166,20 @@ s.router.Use(trace.UserAttributesMiddleware(
 ))
 ```
 
-### Step 9: Add custom business metrics
+### Step 9: Add database query tracing
+
+```go
+import "github.com/bravyr/bravyr-obs/pgxtrace"
+
+// When creating the pgx pool:
+poolConfig, _ := pgxpool.ParseConfig(cfg.DatabaseURL)
+poolConfig.ConnConfig.Tracer = pgxtrace.NewTracer()
+pool, _ := pgxpool.NewWithConfig(ctx, poolConfig)
+```
+
+Every SQL query will appear as a child span in traces with parameterized SQL.
+
+### Step 10: Add custom business metrics
 
 ```go
 // In a metrics.go or wherever appropriate:
