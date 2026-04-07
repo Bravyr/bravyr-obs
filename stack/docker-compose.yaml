@@ -57,10 +57,10 @@ services:
       - monitoring
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:3200/ready || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 30s
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
 
   # ---------------------------------------------------------------------------
   # Prometheus — metrics scraping and storage
@@ -103,10 +103,10 @@ services:
       - monitoring
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:3100/ready || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 30s
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
 
   # ---------------------------------------------------------------------------
   # Alloy — log collector (replaces Promtail, which is EOL since March 2026)
