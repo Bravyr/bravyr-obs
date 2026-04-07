@@ -93,4 +93,9 @@ service:
     logs:
       level: "info"
     metrics:
-      address: "0.0.0.0:8888"   # Collector self-metrics scraped by Prometheus
+      readers:
+        - pull:
+            exporter:
+              prometheus:
+                host: "0.0.0.0"
+                port: 8888
