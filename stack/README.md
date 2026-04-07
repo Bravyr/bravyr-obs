@@ -12,7 +12,6 @@ distributed tracing, metrics scraping, and dashboards.
 | OTel Collector    | otel/opentelemetry-collector-contrib     | OTLP receiver, trace/metrics fanout  | 4317  |
 | Tempo             | grafana/tempo:2.7.2                      | Distributed trace storage            | 3200  |
 | Prometheus        | prom/prometheus:v3.3.1                   | Metrics scraping and storage         | 9090  |
-| postgres-exporter | prometheuscommunity/postgres-exporter    | Postgres metrics for Prometheus      | 9187  |
 | Grafana           | grafana/grafana:11.6.1                   | Dashboards                           | 3000  |
 
 ## Architecture
@@ -49,7 +48,7 @@ and Tempo `tracesToLogsV2` wire log-to-trace and trace-to-log navigation.
 ```bash
 cd stack
 cp .env.example .env
-# edit .env and set POSTGRES_DSN
+# edit .env and set GRAFANA_ADMIN_PASSWORD
 docker compose --env-file .env up -d
 ```
 
@@ -94,6 +93,68 @@ Edit `stack/prometheus/prometheus.yml` and add a new scrape config under the
 Promtail automatically discovers all running containers via the Docker socket.
 Logs from any container are forwarded to Loki with `container` and `service`
 labels derived from the container name and `service` label respectively.
+
+## Exporters (postgres-exporter, redis-exporter, node-exporter)
+
+Exporters should live alongside their parent services, not in this stack. This
+stack is backend-agnostic — it receives and stores telemetry, not produce it.
+
+Add exporters to your **application's** Docker Compose file:
+
+```yaml
+# In your app's docker-compose.yml:
+postgres-exporter:
+  image: prometheuscommunity/postgres-exporter:v0.17.1
+  environment:
+    DATA_SOURCE_NAME: "${POSTGRES_DSN}"
+  ports:
+    - "127.0.0.1:9187:9187"
+
+redis-exporter:
+  image: oliver006/redis_exporter:v1.67.0
+  environment:
+    REDIS_ADDR: "redis:6379"
+  ports:
+    - "127.0.0.1:9121:9121"
+```
+
+Then add scrape targets to `stack/prometheus/prometheus.yml`:
+
+```yaml
+- job_name: "postgres"
+  static_configs:
+    - targets: ["host.docker.internal:9187"]
+
+- job_name: "redis"
+  static_configs:
+    - targets: ["host.docker.internal:9121"]
+```
+
+### node-exporter
+
+node-exporter monitors **host-level** metrics (CPU, memory, disk, network). It
+should run directly on the host machine, not inside Docker — running it in a
+container limits visibility to the container's cgroup.
+
+**If you use Coolify**: Coolify provides built-in server monitoring (CPU, memory,
+disk) via its dashboard. You likely don't need node-exporter unless you want
+those metrics **in Grafana** alongside application metrics for a unified view.
+
+**If you still want it**: Install as a systemd service on the VM:
+
+```bash
+# Ubuntu/Debian:
+sudo apt install prometheus-node-exporter
+# Verify: curl http://localhost:9100/metrics
+```
+
+Then add to `stack/prometheus/prometheus.yml`:
+
+```yaml
+- job_name: "node"
+  static_configs:
+    - targets: ["host.docker.internal:9100"]
+```
 
 ## Resetting State
 

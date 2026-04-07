@@ -266,6 +266,10 @@ Services:
 - **OTel Collector** (trace/metrics relay) — localhost:4317
 - **Grafana** (dashboards) — localhost:3000
 
+### Exporters
+
+Database and cache exporters (postgres-exporter, redis-exporter, node-exporter) should live alongside their parent services in your **application's** Docker Compose, not in this stack. Add their scrape targets to `stack/prometheus/prometheus.yml`. See `stack/README.md` for examples.
+
 ### Docker integration
 
 For Promtail to collect your service's logs, your service must run as a Docker container. Promtail tails all container stdout/stderr automatically via Docker service discovery.

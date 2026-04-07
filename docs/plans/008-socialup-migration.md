@@ -179,16 +179,19 @@ aiResponses, _ := o.Metrics().NewHistogram("ai_response_seconds", "AI response t
 
 In `coolify/staging.yml` and `coolify/production.yml`:
 
-1. Remove services: `seq`, `prometheus`, `grafana`, `postgres-exporter`, `redis-exporter`, `node-exporter`
-2. Remove their volumes
-3. Add env vars to the API service:
+1. Remove backend services: `seq`, `prometheus`, `grafana` (moved to bravyr-obs stack)
+2. Keep exporters: `postgres-exporter`, `redis-exporter`, `node-exporter` — these
+   stay alongside their parent services. Add their scrape targets to the bravyr-obs
+   `stack/prometheus/prometheus.yml`.
+3. Remove volumes for removed services
+4. Add env vars to the API service:
    ```yaml
    environment:
      OBS_OTLP_ENDPOINT: otel-collector:4317
      OBS_SAMPLE_RATE: "1.0"
      OBS_METRICS_PREFIX: socialup_api
    ```
-4. Reference the external bravyr-obs monitoring stack (deployed separately)
+5. Reference the external bravyr-obs monitoring stack (deployed separately)
 
 ### Step 11: Deploy monitoring stack
 
@@ -196,7 +199,7 @@ Deploy the bravyr-obs monitoring stack to the same Docker network:
 
 ```bash
 cd bravyr-obs/stack
-cp .env.example .env  # configure POSTGRES_DSN and GRAFANA_ADMIN_PASSWORD
+cp .env.example .env  # configure GRAFANA_ADMIN_PASSWORD
 docker compose up -d
 ```
 
