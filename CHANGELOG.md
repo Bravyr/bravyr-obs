@@ -25,8 +25,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Non-dev log output now writes to stdout (was stderr); this aligns with the 12-factor app convention and allows Promtail to collect logs via the Docker socket without additional configuration
-- `stack/docker-compose.yml` — replaced Seq service with Loki + Promtail; updated Grafana `depends_on` to require Loki instead of Seq; removed `GF_INSTALL_PLUGINS` env var (no third-party Grafana plugins needed)
-- `stack/docker-compose.dev.yml` — removed Seq service and `seq_data_dev` volume; dev stack now contains only OTel Collector and Prometheus; dev mode uses console output to stdout, no log backend required
+- `stack/docker-compose.yaml` — replaced Seq service with Loki + Promtail; updated Grafana `depends_on` to require Loki instead of Seq; removed `GF_INSTALL_PLUGINS` env var (no third-party Grafana plugins needed)
+- `stack/docker-compose.dev.yaml` — removed Seq service and `seq_data_dev` volume; dev stack now contains only OTel Collector and Prometheus; dev mode uses console output to stdout, no log backend required
 - `stack/grafana/provisioning/datasources/datasources.yaml` — replaced Seq datasource with Loki datasource
 - `stack/.env.example` — removed `SEQ_API_KEY` field
 - `stack/README.md` — updated service list, architecture diagram, and quick-start instructions to reflect Loki + Promtail replacing Seq
@@ -35,14 +35,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Seq CLEF HTTP sink (`seqWriter`) from the `log` package — logs are now collected from container stdout by Promtail and shipped to Loki; no in-process HTTP shipping is needed
 - `SeqURL` and `SeqAPIKey` fields from `config.Config` and `log.Config`
-- `stack/docker-compose.yml` `seq` service and `seq_data` volume
-- `stack/docker-compose.dev.yml` `seq` service and `seq_data_dev` volume
+- `stack/docker-compose.yaml` `seq` service and `seq_data` volume
+- `stack/docker-compose.dev.yaml` `seq` service and `seq_data_dev` volume
 - `datalust-seq-datasource` Grafana plugin requirement
 
 ### Added (stack items from previous entry, carried forward)
 
-- `stack/docker-compose.yml` — full monitoring stack: OTel Collector contrib 0.123.0, Tempo 2.7.2, Prometheus v3.3.1, postgres-exporter v0.17.1, Grafana 11.6.1; all services on a shared `monitoring` bridge network with named volumes for data persistence
-- `stack/docker-compose.dev.yml` — lightweight dev stack (OTel Collector + Prometheus only) for fast local iteration
+- `stack/docker-compose.yaml` — full monitoring stack: OTel Collector contrib 0.123.0, Tempo 2.7.2, Prometheus v3.3.1, postgres-exporter v0.17.1, Grafana 11.6.1; all services on a shared `monitoring` bridge network with named volumes for data persistence
+- `stack/docker-compose.dev.yaml` — lightweight dev stack (OTel Collector + Prometheus only) for fast local iteration
 - `stack/prometheus/prometheus.yml` — scrape config targeting Prometheus self, OTel Collector self-metrics, postgres-exporter, and Go services on `host.docker.internal`; includes template for adding additional services
 - `stack/otel-collector/config.yaml` — OTLP gRPC/HTTP receivers, memory_limiter + batch processors, OTLP exporter to Tempo, Prometheus exporter on port 8889, debug exporter; self-metrics on port 8888
 - `stack/tempo/config.yaml` — single-node Tempo config with local filesystem storage, 72h trace retention, OTLP receiver, remote_write back to Prometheus for span metrics
