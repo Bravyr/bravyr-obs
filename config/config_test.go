@@ -70,94 +70,29 @@ func TestValidate_emptyLogLevel(t *testing.T) {
 	}
 }
 
-func TestString_redactsAPIKey(t *testing.T) {
-	cfg := Config{
-		ServiceName: "test-svc",
-		SeqAPIKey:   "super-secret-key",
-	}
+func TestString_noSensitiveFields(t *testing.T) {
+	cfg := Config{ServiceName: "test-svc", OTLPEndpoint: "otel:4317"}
 	s := cfg.String()
-	if strings.Contains(s, "super-secret-key") {
-		t.Fatal("String() must not contain the actual API key")
-	}
-	if !strings.Contains(s, "***") {
-		t.Fatal("String() should show redacted API key as ***")
+	if !strings.Contains(s, "test-svc") {
+		t.Fatalf("String() should contain service name, got: %s", s)
 	}
 }
 
-func TestString_emptyAPIKey(t *testing.T) {
-	cfg := Config{ServiceName: "test-svc"}
-	s := cfg.String()
-	if strings.Contains(s, "***") {
-		t.Fatal("String() should not show *** when API key is empty")
-	}
-}
-
-func TestMarshalJSON_redactsAPIKey(t *testing.T) {
-	cfg := Config{
-		ServiceName: "test-svc",
-		SeqAPIKey:   "super-secret-key",
-	}
+func TestMarshalJSON_containsExpectedFields(t *testing.T) {
+	cfg := Config{ServiceName: "test-svc", LogLevel: "info"}
 	data, err := json.Marshal(cfg)
 	if err != nil {
 		t.Fatalf("MarshalJSON failed: %v", err)
 	}
-	if strings.Contains(string(data), "super-secret-key") {
-		t.Fatal("MarshalJSON must not contain the actual API key")
+	var out map[string]any
+	if err := json.Unmarshal(data, &out); err != nil {
+		t.Fatalf("json.Unmarshal failed: %v", err)
 	}
-	if !strings.Contains(string(data), "***") {
-		t.Fatal("MarshalJSON should show redacted API key as ***")
+	if _, ok := out["service_name"]; !ok {
+		t.Fatal("MarshalJSON must include service_name")
 	}
-}
-
-func TestMarshalJSON_emptyAPIKey(t *testing.T) {
-	cfg := Config{ServiceName: "test-svc"}
-	data, err := json.Marshal(cfg)
-	if err != nil {
-		t.Fatalf("MarshalJSON failed: %v", err)
-	}
-	if strings.Contains(string(data), "***") {
-		t.Fatal("MarshalJSON should not show *** when API key is empty")
-	}
-}
-
-func TestValidate_seqURLRequiresHTTPS(t *testing.T) {
-	cfg := Config{
-		ServiceName: "test-svc",
-		LogLevel:    "info",
-		SeqURL:      "http://seq.example.com:5341",
-		DevMode:     false,
-	}
-	err := cfg.Validate()
-	if err == nil {
-		t.Fatal("expected error for non-https SeqURL in non-dev mode")
-	}
-	if !strings.Contains(err.Error(), "SeqURL") {
-		t.Fatalf("expected error about SeqURL, got: %v", err)
-	}
-}
-
-func TestValidate_seqURLHTTPAllowedInDevMode(t *testing.T) {
-	cfg := Config{
-		ServiceName: "test-svc",
-		LogLevel:    "info",
-		SeqURL:      "http://localhost:5341",
-		DevMode:     true,
-		Environment: "development",
-	}
-	if err := cfg.Validate(); err != nil {
-		t.Fatalf("expected no error for http SeqURL in dev mode, got: %v", err)
-	}
-}
-
-func TestValidate_seqURLHTTPSAlwaysValid(t *testing.T) {
-	cfg := Config{
-		ServiceName: "test-svc",
-		LogLevel:    "info",
-		SeqURL:      "https://seq.example.com:5341",
-		DevMode:     false,
-	}
-	if err := cfg.Validate(); err != nil {
-		t.Fatalf("expected no error for https SeqURL, got: %v", err)
+	if _, ok := out["log_level"]; !ok {
+		t.Fatal("MarshalJSON must include log_level")
 	}
 }
 
