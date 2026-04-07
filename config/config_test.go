@@ -204,3 +204,63 @@ func TestValidate_metricsPrefix(t *testing.T) {
 		})
 	}
 }
+
+func TestValidate_otlpLoopbackRejected(t *testing.T) {
+	for _, ep := range []string{"127.0.0.1:4317", "127.0.1.1:4317"} {
+		cfg := Config{ServiceName: "svc", LogLevel: "info", OTLPEndpoint: ep}
+		if err := cfg.Validate(); err == nil {
+			t.Fatalf("expected error for loopback endpoint %q", ep)
+		}
+	}
+}
+
+func TestValidate_otlpLinkLocalRejected(t *testing.T) {
+	cfg := Config{ServiceName: "svc", LogLevel: "info", OTLPEndpoint: "169.254.169.254:4317"}
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("expected error for link-local endpoint")
+	}
+}
+
+func TestValidate_otlpLoopbackAllowedInDev(t *testing.T) {
+	cfg := Config{ServiceName: "svc", LogLevel: "info", OTLPEndpoint: "127.0.0.1:4317", DevMode: true}
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("expected no error for loopback in DevMode, got: %v", err)
+	}
+}
+
+func TestValidate_otlpPrivateIPAllowed(t *testing.T) {
+	for _, ep := range []string{"10.0.0.1:4317", "192.168.1.1:4317", "172.18.0.5:4317"} {
+		cfg := Config{ServiceName: "svc", LogLevel: "info", OTLPEndpoint: ep}
+		if err := cfg.Validate(); err != nil {
+			t.Fatalf("expected no error for private IP %q, got: %v", ep, err)
+		}
+	}
+}
+
+func TestValidate_otlpHostnameAllowed(t *testing.T) {
+	cfg := Config{ServiceName: "svc", LogLevel: "info", OTLPEndpoint: "otel-collector:4317"}
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("expected no error for hostname, got: %v", err)
+	}
+}
+
+func TestValidate_otlpLoopbackNoPortRejected(t *testing.T) {
+	cfg := Config{ServiceName: "svc", LogLevel: "info", OTLPEndpoint: "127.0.0.1"}
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("expected error for loopback without port")
+	}
+}
+
+func TestValidate_otlpIPv6LoopbackRejected(t *testing.T) {
+	cfg := Config{ServiceName: "svc", LogLevel: "info", OTLPEndpoint: "[::1]:4317"}
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("expected error for IPv6 loopback")
+	}
+}
+
+func TestValidate_otlpPublicIPAllowed(t *testing.T) {
+	cfg := Config{ServiceName: "svc", LogLevel: "info", OTLPEndpoint: "203.0.113.1:4317"}
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("expected no error for public IP, got: %v", err)
+	}
+}
