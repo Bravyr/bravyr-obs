@@ -272,6 +272,56 @@ Each query creates a child span with:
 connConfig.Tracer = pgxtrace.NewTracer(pgxtrace.WithIncludeQueryParameters())
 ```
 
+## Redis Tracing (redistrace)
+
+Add automatic OTel spans to every Redis command:
+
+```go
+import "github.com/bravyr/bravyr-obs/redistrace"
+
+rdb := redis.NewClient(&redis.Options{Addr: "localhost:6379"})
+if err := redistrace.Instrument(rdb); err != nil {
+    log.Fatal(err)
+}
+// All Redis commands now produce OTel spans.
+```
+
+Command text is redacted by default. Use `redistrace.WithDBStatement()` in dev only — command arguments can contain PII, auth credentials, or session tokens.
+
+```go
+// Development only:
+redistrace.Instrument(rdb, redistrace.WithDBStatement())
+
+// Enable OTel metrics collection in addition to tracing:
+redistrace.Instrument(rdb, redistrace.WithMetrics())
+```
+
+## Temporal Tracing (temporaltrace)
+
+Add OTel spans to every Temporal workflow, activity, signal, and query operation:
+
+```go
+import "github.com/bravyr/bravyr-obs/temporaltrace"
+
+i, err := temporaltrace.NewInterceptor()
+if err != nil {
+    log.Fatal(err)
+}
+c, err := client.Dial(client.Options{
+    HostPort:     "temporal:7233",
+    Interceptors: []interceptor.ClientInterceptor{i},
+})
+```
+
+To reduce span volume for high-frequency operations:
+
+```go
+i, err := temporaltrace.NewInterceptor(
+    temporaltrace.WithoutSignalTracing(), // skip spans for signal handlers
+    temporaltrace.WithoutQueryTracing(),  // skip spans for query handlers
+)
+```
+
 ## Monitoring Stack
 
 Start the full LGTM stack:

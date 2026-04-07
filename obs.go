@@ -2,6 +2,9 @@
 // It provides structured logging, distributed tracing, and Prometheus metrics
 // in a single Init() call. Logs are written as structured JSON to stdout and
 // collected by Promtail for shipping to Loki.
+//
+// For database, cache, and workflow instrumentation, see the sub-packages:
+// pgxtrace (PostgreSQL), redistrace (Redis), and temporaltrace (Temporal).
 package obs
 
 import (
