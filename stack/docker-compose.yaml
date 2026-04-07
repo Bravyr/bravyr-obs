@@ -38,7 +38,7 @@ services:
       - monitoring
     depends_on:
       tempo:
-        condition: service_healthy
+        condition: service_started
       prometheus:
         condition: service_started
 
@@ -126,7 +126,7 @@ services:
       - monitoring
     depends_on:
       loki:
-        condition: service_healthy
+        condition: service_started
 
   # ---------------------------------------------------------------------------
   # Grafana — dashboards wired to Prometheus, Tempo, and Loki
@@ -151,11 +151,11 @@ services:
       - monitoring
     depends_on:
       prometheus:
-        condition: service_healthy
+        condition: service_started
       tempo:
-        condition: service_healthy
+        condition: service_started
       loki:
-        condition: service_healthy
+        condition: service_started
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/health || exit 1"]
       interval: 30s
