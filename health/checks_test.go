@@ -108,3 +108,38 @@ func TestRedisCheck_nilResult(t *testing.T) {
 type nilRedisClient struct{}
 
 func (c *nilRedisClient) Ping(_ context.Context) RedisResult { return nil }
+
+// --- TemporalCheck tests ---
+
+type mockTemporalChecker struct{ err error }
+
+func (m *mockTemporalChecker) CheckHealth(_ context.Context) error { return m.err }
+
+func TestTemporalCheck_healthy(t *testing.T) {
+	fn := TemporalCheck(&mockTemporalChecker{err: nil})
+	if err := fn(context.Background()); err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+}
+
+func TestTemporalCheck_unhealthy(t *testing.T) {
+	want := errors.New("temporal unavailable")
+	fn := TemporalCheck(&mockTemporalChecker{err: want})
+	if err := fn(context.Background()); !errors.Is(err, want) {
+		t.Fatalf("expected %v, got %v", want, err)
+	}
+}
+
+func TestTemporalCheck_respectsContext(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	fn := TemporalCheck(&ctxAwareTemporalChecker{})
+	if err := fn(ctx); !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected context.Canceled, got %v", err)
+	}
+}
+
+type ctxAwareTemporalChecker struct{}
+
+func (c *ctxAwareTemporalChecker) CheckHealth(ctx context.Context) error { return ctx.Err() }

@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- OTLPEndpoint validation against loopback and link-local IP addresses in non-dev mode
+- `TemporalCheck()` health helper with `TemporalChecker` interface
+- PII field scrubbing for log output (`ScrubFields` config, `DefaultDenylist`)
+- Collector access control documentation (`docs/collector-access-control.md`)
 - Integration guide (`docs/integration-guide.md`) — step-by-step setup for any Go service
 - socialup-api migration plan (`docs/plans/008-socialup-migration.md`)
 - `stack/loki/config.yaml` — single-node Loki 3.5.0 config with filesystem storage, 72h log retention, tsdb schema v13, and compaction

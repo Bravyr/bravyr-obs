@@ -36,10 +36,16 @@ func Init(cfg Config) (*Obs, error) {
 		return nil, err
 	}
 
+	var scrubFields []string
+	if !cfg.DevMode {
+		scrubFields = obslog.DefaultDenylist
+	}
+
 	logger, err := obslog.New(obslog.Config{
 		Level:       cfg.LogLevel,
 		ServiceName: cfg.ServiceName,
 		DevMode:     cfg.DevMode,
+		ScrubFields: scrubFields,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("log init: %w", err)

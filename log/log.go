@@ -26,6 +26,12 @@ type Config struct {
 
 	// DevMode enables human-readable console output. Must not be true in production.
 	DevMode bool
+
+	// ScrubFields enables PII scrubbing on log output. When non-nil, fields
+	// whose names contain any denylist entry are redacted to "[REDACTED]".
+	// Use DefaultDenylist for a sensible default, or provide custom entries.
+	// nil disables scrubbing (backward compatible).
+	ScrubFields []string
 }
 
 // Logger wraps zerolog.Logger with a no-op Shutdown method for lifecycle
@@ -54,6 +60,10 @@ func New(cfg Config) (*Logger, error) {
 		// Structured JSON to stdout so Promtail can scrape logs from container
 		// stdout and forward them to Loki.
 		w = os.Stdout
+	}
+
+	if cfg.ScrubFields != nil {
+		w = newScrubWriter(w, cfg.ScrubFields)
 	}
 
 	zl := zerolog.New(w).
