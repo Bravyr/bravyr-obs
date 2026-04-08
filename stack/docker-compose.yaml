@@ -69,13 +69,19 @@ services:
     image: prom/prometheus:v3.11.0
     container_name: bravyr_prometheus
     restart: unless-stopped
+    entrypoint: ["/bin/sh", "-c"]
     command:
-      - "--config.file=/etc/prometheus/prometheus.yml"
-      - "--storage.tsdb.path=/prometheus"
-      - "--storage.tsdb.retention.time=30d"
-      - "--web.enable-lifecycle"
-      - "--web.enable-remote-write-receiver"
-      - "--enable-feature=exemplar-storage"
+      - |
+        echo "$INTERNAL_API_KEY" > /etc/prometheus/api_token
+        exec prometheus \
+          --config.file=/etc/prometheus/prometheus.yml \
+          --storage.tsdb.path=/prometheus \
+          --storage.tsdb.retention.time=30d \
+          --web.enable-lifecycle \
+          --web.enable-remote-write-receiver \
+          --enable-feature=exemplar-storage
+    environment:
+      INTERNAL_API_KEY: "${INTERNAL_API_KEY:?INTERNAL_API_KEY must be set in .env}"
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus
