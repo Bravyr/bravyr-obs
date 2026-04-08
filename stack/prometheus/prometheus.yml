@@ -51,6 +51,7 @@ scrape_configs:
   # ---------------------------------------------------------------------------
   - job_name: "socialup-api"
     metrics_path: "/metrics"
+    bearer_token_file: /etc/prometheus/api_token
     static_configs:
       - targets:
           - "api:8080"

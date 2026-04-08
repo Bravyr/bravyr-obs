@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `redistrace` sub-package for Redis command span instrumentation via redisotel (`db.statement` off by default)
 - `temporaltrace` sub-package for Temporal workflow/activity span instrumentation via the Temporal OTel contrib interceptor
+- Prometheus bearer token auth for `/metrics` scraping via `INTERNAL_API_KEY` env var
 - `OTLPInsecure` config field (`OBS_OTLP_INSECURE`) for plaintext gRPC to internal collectors without enabling DevMode
 - Coolify deployment guide (`docs/coolify-deployment.md`)
 - `pgxtrace` sub-package for automatic pgx database query span instrumentation via otelpgx
