@@ -43,9 +43,10 @@ func Init(ctx context.Context, cfg Config) (*Provider, error) {
 	opts := []otlptracegrpc.Option{
 		otlptracegrpc.WithEndpoint(cfg.OTLPEndpoint),
 	}
-	if cfg.DevMode {
-		// Insecure transport is intentional in dev — the collector runs locally
-		// without TLS. Non-dev mode uses the default TLS configuration.
+	if cfg.DevMode || cfg.OTLPInsecure {
+		// Insecure (plaintext) transport for local/internal collectors.
+		// DevMode always enables it; OTLPInsecure enables it independently
+		// for production services connecting to internal collectors.
 		opts = append(opts, otlptracegrpc.WithInsecure())
 	}
 

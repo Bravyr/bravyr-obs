@@ -28,6 +28,11 @@ type Config struct {
 	// DevMode enables AlwaysSample and insecure (plaintext) gRPC transport.
 	// Must not be true in production.
 	DevMode bool
+
+	// OTLPInsecure enables plaintext gRPC transport to the OTLP collector
+	// without enabling DevMode. Use for internal collectors on private
+	// Docker networks where TLS adds complexity with no security benefit.
+	OTLPInsecure bool
 }
 
 // Validate returns an error if the Config is not usable by Init.
