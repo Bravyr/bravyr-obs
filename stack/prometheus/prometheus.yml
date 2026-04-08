@@ -40,31 +40,31 @@ scrape_configs:
   # ---------------------------------------------------------------------------
 
   # ---------------------------------------------------------------------------
-  # Go services running on the host machine (outside Docker).
-  # Each service must expose a /metrics endpoint in Prometheus text format.
-  # OBS_METRICS_PREFIX in bravyr-obs adds a prefix to all metric names —
-  # if you set a prefix, update the metric names in your Grafana dashboards.
+  # Go services — update targets to match your Coolify container names or
+  # Docker Compose service names on the shared network.
   #
-  # host.docker.internal resolves to the host machine from inside a container
-  # on Docker Desktop (Mac/Windows). On Linux, add --add-host=host.docker.internal:host-gateway
-  # to the prometheus service or use the host network mode.
+  # On Coolify with "Connect To Predefined Network" enabled, services in
+  # other compose stacks are reachable by their Docker Compose service name
+  # on the shared coolify network (e.g., "api:8080").
+  #
+  # For local dev with Docker Desktop, use host.docker.internal:PORT.
   # ---------------------------------------------------------------------------
-  - job_name: "go-services"
+  - job_name: "socialup-api"
     metrics_path: "/metrics"
     static_configs:
       - targets:
-          - "host.docker.internal:8080"   # default Go service port — change as needed
+          - "api:8080"
         labels:
-          service: "my-service"           # replaces with your actual service name
+          service: "socialup-api"
 
   # ---------------------------------------------------------------------------
-  # Template for adding additional Go services:
+  # Template for adding additional services:
   #
   # - job_name: "my-other-service"
   #   metrics_path: "/metrics"
   #   static_configs:
   #     - targets:
-  #         - "host.docker.internal:8081"
+  #         - "worker:8081"
   #       labels:
   #         service: "my-other-service"
   # ---------------------------------------------------------------------------
