@@ -18,6 +18,7 @@ type Config struct {
 	OTLPEndpoint  string  `env:"OBS_OTLP_ENDPOINT"`
 	SampleRate    float64 `env:"OBS_SAMPLE_RATE"    envDefault:"1.0"`
 	DevMode       bool    `env:"OBS_DEV_MODE"       envDefault:"false"`
+	OTLPInsecure  bool    `env:"OBS_OTLP_INSECURE"  envDefault:"false"`
 	MetricsPrefix string  `env:"OBS_METRICS_PREFIX" envDefault:""`
 }
 
@@ -58,8 +59,8 @@ func (c Config) Validate() error {
 // String returns a human-readable representation of the configuration.
 func (c Config) String() string {
 	return fmt.Sprintf(
-		"Config{ServiceName:%q Environment:%q LogLevel:%q OTLPEndpoint:%q SampleRate:%g DevMode:%t MetricsPrefix:%q}",
-		c.ServiceName, c.Environment, c.LogLevel, c.OTLPEndpoint, c.SampleRate, c.DevMode, c.MetricsPrefix,
+		"Config{ServiceName:%q Environment:%q LogLevel:%q OTLPEndpoint:%q SampleRate:%g DevMode:%t OTLPInsecure:%t MetricsPrefix:%q}",
+		c.ServiceName, c.Environment, c.LogLevel, c.OTLPEndpoint, c.SampleRate, c.DevMode, c.OTLPInsecure, c.MetricsPrefix,
 	)
 }
 
@@ -100,6 +101,7 @@ func (c Config) MarshalJSON() ([]byte, error) {
 		OTLPEndpoint  string  `json:"otlp_endpoint"`
 		SampleRate    float64 `json:"sample_rate"`
 		DevMode       bool    `json:"dev_mode"`
+		OTLPInsecure  bool    `json:"otlp_insecure"`
 		MetricsPrefix string  `json:"metrics_prefix"`
 	}{
 		ServiceName:   c.ServiceName,
@@ -108,6 +110,7 @@ func (c Config) MarshalJSON() ([]byte, error) {
 		OTLPEndpoint:  c.OTLPEndpoint,
 		SampleRate:    c.SampleRate,
 		DevMode:       c.DevMode,
+		OTLPInsecure:  c.OTLPInsecure,
 		MetricsPrefix: c.MetricsPrefix,
 	})
 }

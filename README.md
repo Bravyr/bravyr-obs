@@ -274,6 +274,7 @@ All configuration fields can be set via struct literal or environment variables:
 | `OTLPEndpoint` | `OBS_OTLP_ENDPOINT` | | OpenTelemetry Collector gRPC endpoint |
 | `SampleRate` | `OBS_SAMPLE_RATE` | `1.0` | Fraction of traces to sample (0.0–1.0); overridden to 1.0 when `DevMode` is true |
 | `DevMode` | `OBS_DEV_MODE` | `false` | Enable pretty console logging and always-sample tracing |
+| `OTLPInsecure` | `OBS_OTLP_INSECURE` | `false` | Use plaintext gRPC to OTLP collector (for internal collectors on private networks) |
 | `MetricsPrefix` | `OBS_METRICS_PREFIX` | | Prefix prepended to all metric names (e.g. `"myapi"` → `"myapi_http_requests_total"`); empty means no prefix |
 
 ## Architecture

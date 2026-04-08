@@ -60,6 +60,7 @@ func Init(cfg Config) (*Obs, error) {
 		OTLPEndpoint: cfg.OTLPEndpoint,
 		SampleRate:   cfg.SampleRate,
 		DevMode:      cfg.DevMode,
+		OTLPInsecure: cfg.OTLPInsecure,
 	})
 	if err != nil {
 		// Logger was successfully constructed; shut it down before returning
