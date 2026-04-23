@@ -35,3 +35,21 @@ jobs:
           govulncheck ./...
 
       - run: go mod verify
+
+  alloy-fmt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Grafana Alloy
+        run: |
+          curl -sSL -o alloy.zip \
+            https://github.com/grafana/alloy/releases/download/v1.14.0/alloy-linux-amd64.zip
+          unzip -q alloy.zip
+          chmod +x alloy-linux-amd64
+          sudo mv alloy-linux-amd64 /usr/local/bin/alloy
+
+      - name: Verify Alloy config parses
+        env:
+          FARO_ALLOWED_ORIGINS: "https://example.com"
+        run: alloy fmt --test stack/alloy/config.alloy

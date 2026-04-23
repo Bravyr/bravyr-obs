@@ -1,8 +1,21 @@
-// Grafana Alloy configuration for log collection.
-// Replaces Promtail (EOL March 2026).
-// Discovers Docker containers, parses JSON logs, extracts labels,
-// and ships to Loki.
+// Grafana Alloy configuration for the bravyr-obs stack.
+//
+// Responsibilities:
+//   1. Discover Docker containers and ship stdout JSON logs to Loki.
+//   2. Receive frontend telemetry from Grafana Faro Web SDK (traces + logs
+//      + events + measurements) and fan out to Tempo (via OTel Collector)
+//      and Loki.
+//
+// The faro.receiver listens on an internal-only port. Public exposure,
+// TLS, basic-auth, CORS and rate limiting are enforced upstream by
+// Coolify/Traefik against https://obs.bravyr.com/collect. The `monitoring`
+// Docker network is treated as a trust boundary — any container on it can
+// reach port 12347 directly, so the Alloy-side rate limit acts as an
+// absolute backstop below the Traefik limit.
 
+// ---------------------------------------------------------------------------
+// Docker log collection (replaces Promtail, EOL March 2026).
+// ---------------------------------------------------------------------------
 discovery.docker "containers" {
   host = "unix:///var/run/docker.sock"
   refresh_interval = "5s"
@@ -58,4 +71,138 @@ loki.write "loki" {
   endpoint {
     url = "http://loki:3100/loki/api/v1/push"
   }
+}
+
+// ---------------------------------------------------------------------------
+// Frontend RUM — Grafana Faro Web SDK ingest.
+// Port 12347 is bound to the monitoring network only (no Docker `ports:`
+// mapping). Auth + CORS + rate limiting are enforced by Traefik at
+// https://obs.bravyr.com/collect. The Alloy-side rate limit (20 r/s, burst
+// 100) matches the Traefik middleware so a caller who reaches Alloy
+// directly from inside the Docker network cannot exceed the edge limit.
+// ---------------------------------------------------------------------------
+faro.receiver "frontend" {
+  server {
+    listen_address           = "0.0.0.0"
+    listen_port              = 12347
+    cors_allowed_origins     = string.split(sys.env("FARO_ALLOWED_ORIGINS"), ",")
+    max_allowed_payload_size = "1MiB"
+
+    rate_limiting {
+      enabled    = true
+      rate       = 20
+      burst_size = 100
+    }
+  }
+
+  // Source-map symbolication intentionally omitted: Alloy's `sourcemaps`
+  // block auto-fetches `.map` files over HTTP and is an SSRF vector
+  // without an explicit allowlist. Resolve stacks offline instead.
+
+  output {
+    traces = [otelcol.exporter.otlp.tempo.input]
+    logs   = [loki.process.faro.receiver]
+  }
+}
+
+// Forward browser traces into the same OTel Collector used by backend
+// services so correlation by traceparent works out of the box.
+otelcol.exporter.otlp "tempo" {
+  client {
+    endpoint = "otel-collector:4317"
+    tls {
+      insecure = true
+    }
+  }
+}
+
+// Dedicated Loki pipeline for Faro payloads. Extracts bounded fields from
+// the payload JSON and promotes them to indexed labels; keeps unbounded
+// identifiers in structured metadata; scrubs credential-shaped substrings
+// as defence-in-depth.
+loki.process "faro" {
+  // Extract fields from the Faro payload emitted by faro.receiver.
+  stage.json {
+    expressions = {
+      kind       = "kind",
+      app        = "meta.app.name",
+      env        = "meta.app.environment",
+      release    = "meta.app.version",
+      browser    = "meta.browser.name",
+      os         = "meta.browser.os",
+      session_id = "meta.session.id",
+      user_id    = "meta.user.id",
+      trace_id   = "meta.trace.trace_id",
+      route      = "meta.view.name",
+    }
+  }
+
+  // Route normalization (defence-in-depth). The SDK beforeSend hook
+  // should already emit templated routes (e.g. "/user/:id"). These
+  // regex replacements strip numeric and UUID path segments that
+  // slip through, keeping cardinality bounded.
+  stage.template {
+    source   = "route"
+    template = "{{ regexReplaceAll `/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}` .Value `/:uuid` }}"
+  }
+  stage.template {
+    source   = "route"
+    template = "{{ regexReplaceAll `/[0-9]+` .Value `/:id` }}"
+  }
+
+  stage.static_labels {
+    values = {
+      source = "faro",
+    }
+  }
+
+  // Bounded, low-cardinality fields → indexed labels.
+  stage.labels {
+    values = {
+      app     = "",
+      kind    = "",
+      env     = "",
+      browser = "",
+      os      = "",
+      route   = "",
+    }
+  }
+
+  // High-cardinality identifiers → structured metadata (filterable, not
+  // indexed). Requires Loki >= 3.6 and `allow_structured_metadata: true`.
+  stage.structured_metadata {
+    values = {
+      user_id    = "",
+      session_id = "",
+      trace_id   = "",
+      release    = "",
+    }
+  }
+
+  // Defence-in-depth credential scrubbing. The Faro SDK beforeSend
+  // hook is the primary control; these stages catch anything that
+  // slips through. Bearer allows the full Base64 alphabet (incl.
+  // `+` `/` `=`) plus the URL-safe alternates used by JWTs.
+  stage.replace {
+    expression = "(Bearer\\s+)[A-Za-z0-9._+/=\\-]+"
+    replace    = "$1[REDACTED]"
+  }
+  stage.replace {
+    expression = "(sk-)[A-Za-z0-9]{16,}"
+    replace    = "$1[REDACTED]"
+  }
+  stage.replace {
+    expression = "(eyJ)[A-Za-z0-9._+/=\\-]{16,}"
+    replace    = "$1[REDACTED]"
+  }
+
+  // Strip common IP-shaped fields so Loki never stores the client
+  // address. Faro payloads and any forwarded headers picked up by the
+  // receiver are both covered by matching the JSON value form.
+  stage.replace {
+    expression = "\"(client_ip|remote_addr|remoteAddr|ip|x_forwarded_for)\":\\s*\"[^\"]+\""
+    replace    = "\"$1\":\"[REDACTED]\""
+  }
+
+  forward_to = [loki.write.loki.receiver]
 }

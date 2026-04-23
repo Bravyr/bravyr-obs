@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Frontend observability ingest (`faro.receiver` in Alloy) for Grafana Faro Web SDK clients; traces fan out to the existing OTel Collector, logs and measurements land in a dedicated Loki pipeline under `{source="faro"}`
+- Coolify/Traefik container labels on Alloy for the public ingest endpoint at `https://obs.bravyr.com/collect` with basic-auth, CORS allowlist, 20 r/s rate limit, 1 MB body cap, and HSTS
+- Grafana dashboard `Frontend RUM (Faro)` covering page loads, distinct sessions, JS exceptions, Core Web Vitals (LCP/INP/CLS p75 by route), browser/OS/route breakdowns, and an exception table with Tempo trace links
+- Defence-in-depth credential scrubbing in the Alloy Faro Loki pipeline (`Bearer …`, `sk-…`, `eyJ…` prefixes redacted); `user_id`, `session_id`, `trace_id`, `release`, `browser`, `os`, `route` attached as Loki structured metadata to avoid index cardinality blow-ups
+- Frontend observability plan (`docs/plans/009-frontend-observability.md`)
+- Integration guide addendum documenting the Faro SDK env var contract for the `socialup` React app
+- `stack/scripts/smoke-faro.sh` — end-to-end smoke test that posts a synthetic Faro payload to the local Alloy receiver and asserts the span surfaces in Tempo and the log surfaces in Loki
+- `alloy-fmt` CI job that runs `alloy fmt --test` against `stack/alloy/config.alloy` on every PR, catching syntax regressions before merge
+- Alloy container healthcheck on `/-/ready` (port 12345) so orchestrators surface crashes instead of silently continuing
 - `redistrace` sub-package for Redis command span instrumentation via redisotel (`db.statement` off by default)
 - `temporaltrace` sub-package for Temporal workflow/activity span instrumentation via the Temporal OTel contrib interceptor
 - Prometheus bearer token auth for `/metrics` scraping via `INTERNAL_API_KEY` env var
@@ -29,6 +38,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Tempo `block_retention` raised from 72h to 14 days and `max_block_bytes` from 1 MB to 100 MB to absorb frontend trace volume without tiny-block accumulation
+- Loki `retention_period` raised from 72h to 14 days; `ingestion_rate_mb` raised from 8 to 32 (burst 64) to accommodate Faro payloads; `allow_structured_metadata: true` added
+- `stack/docker-compose.yaml` — Alloy service now depends on `otel-collector` (Faro traces fan out through it), requires `FARO_ALLOWED_ORIGINS` env var, and carries Traefik middleware labels for the public `/collect` route
+- `stack/.env.example` — added `FARO_PUBLIC_HOST`, `FARO_ALLOWED_ORIGINS`, `FARO_APP_KEY`, `FARO_BASIC_AUTH_HTPASSWD`
 - Non-dev log output now writes to stdout (was stderr); this aligns with the 12-factor app convention and allows Promtail to collect logs via the Docker socket without additional configuration
 - `stack/docker-compose.yaml` — replaced Seq service with Loki + Promtail; updated Grafana `depends_on` to require Loki instead of Seq; removed `GF_INSTALL_PLUGINS` env var (no third-party Grafana plugins needed)
 - `stack/docker-compose.dev.yaml` — removed Seq service and `seq_data_dev` volume; dev stack now contains only OTel Collector and Prometheus; dev mode uses console output to stdout, no log backend required

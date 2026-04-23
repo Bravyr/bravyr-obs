@@ -1,9 +1,13 @@
 # bravyr-obs
 
 Opinionated observability library for Go services. Structured logging,
-distributed tracing, and Prometheus metrics in one `Init()` call.
+distributed tracing, and Prometheus metrics in one `Init()` call. The
+companion `stack/` folder ships a self-hosted OTel Collector + Tempo +
+Loki + Prometheus + Grafana + Alloy deployment, including a Grafana
+Faro ingest path for **frontend RUM** (web-vitals, JS errors, distributed
+traces browser → Go) that correlates with backend spans out of the box.
 
-See the [Integration Guide](docs/integration-guide.md) for step-by-step setup instructions.
+See the [Integration Guide](docs/integration-guide.md) for step-by-step setup instructions, including the frontend section for Faro Web SDK clients.
 
 ## Quick Start
 
