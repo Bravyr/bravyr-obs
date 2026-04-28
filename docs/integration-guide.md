@@ -386,3 +386,102 @@ r.Use(trace.UserAttributesMiddleware(...)) // 5. adds user to span
 ```
 
 `o.Middleware()` handles steps 1-3 automatically.
+
+## Frontend Observability (Grafana Faro)
+
+The stack ingests browser telemetry (RUM) from any Grafana Faro Web SDK client through Alloy's `faro.receiver`. Traces reuse the backend's OTel Collector so a single Tempo trace spans the browser span and its downstream Go handler span.
+
+### Backend requirements
+
+No code changes are required in Go services — the existing middleware already accepts the W3C `traceparent` header propagated by Faro's fetch/XHR instrumentation. Verify the client app sends requests to the same API host (or CORS exposes `traceparent`).
+
+### Ingest endpoint
+
+Public route, terminated by Coolify/Traefik:
+
+```
+POST https://obs.bravyr.com/collect
+Authorization: Basic base64("faro:${FARO_APP_KEY}")
+Origin: https://<configured-origin>
+```
+
+Traefik enforces basic-auth, the origin allowlist, a 20 r/s rate limit (100 r/s burst), a 1 MB body cap, and HSTS. Alloy additionally enforces the CORS allowlist at the application layer.
+
+### Stack environment variables
+
+See `stack/.env.example`:
+
+| Variable | Purpose |
+|----------|---------|
+| `FARO_PUBLIC_HOST` | FQDN Traefik routes `/collect` for (default `obs.bravyr.com`). |
+| `FARO_ALLOWED_ORIGINS` | Comma-separated exact origins allowed to POST telemetry. |
+| `FARO_APP_KEY` | Shared write-only token shipped to browsers as the basic-auth password. Per-env, rotatable. |
+| `FARO_BASIC_AUTH_HTPASSWD` | Bcrypt htpasswd line for the Traefik `basicauth` middleware. Generate with `htpasswd -nbB faro "$FARO_APP_KEY"` and double every `$` to `$$` before pasting. |
+
+### Frontend SDK integration
+
+In the React (or any JS) client, pin the SDK versions and initialize before the app mounts:
+
+```ts
+import { initializeFaro, getWebInstrumentations } from "@grafana/faro-web-sdk";
+import { TracingInstrumentation } from "@grafana/faro-web-tracing";
+
+initializeFaro({
+  url: import.meta.env.VITE_FARO_URL,
+  apiKey: import.meta.env.VITE_FARO_APP_KEY,
+  app: {
+    name: import.meta.env.VITE_FARO_APP_NAME,
+    version: import.meta.env.VITE_FARO_APP_VERSION,
+    environment: import.meta.env.VITE_FARO_ENVIRONMENT,
+  },
+  sessionTracking: {
+    enabled: true,
+    samplingRate: Number(import.meta.env.VITE_FARO_SAMPLE_RATE ?? 1.0),
+  },
+  instrumentations: [
+    ...getWebInstrumentations({ captureConsole: true }),
+    new TracingInstrumentation(),
+  ],
+  beforeSend: (item) => {
+    // Strip query strings, redact auth headers, drop request/response bodies,
+    // truncate stacks at 4096 chars, swap user email for opaque user ID.
+    return scrubFaroItem(item);
+  },
+});
+```
+
+The SDK sends `Authorization: Basic base64("faro:$VITE_FARO_APP_KEY")` via its fetch transport.
+
+### Client env var contract
+
+| Variable | Example |
+|----------|---------|
+| `VITE_FARO_URL` | `https://obs.bravyr.com/collect` |
+| `VITE_FARO_APP_NAME` | `socialup-web` |
+| `VITE_FARO_APP_VERSION` | `0.12.3+abc1234` (git SHA suffix) |
+| `VITE_FARO_ENVIRONMENT` | `development` / `staging` / `production` |
+| `VITE_FARO_SAMPLE_RATE` | `1.0` non-prod, `0.1` prod |
+| `VITE_FARO_APP_KEY` | basic-auth password — per-env |
+
+### Sampling defaults
+
+| Environment | Errors | Page loads | Web-vitals |
+|-------------|--------|-----------|------------|
+| Production | 100% | 10% | 100% |
+| Staging | 100% | 100% | 100% |
+| Development | 100% | 100% | 100% |
+
+### Route labelling
+
+The Grafana dashboard aggregates Core Web Vitals and exceptions by `route`. For `route` to be useful, the SDK must emit a **normalized** path (e.g. `/user/:id`, not `/user/12345`). Call `faro.api.setView({ name: "/user/:id" })` on every navigation — typically inside your router's location-change hook. The Alloy pipeline runs a regex backstop that replaces numeric and UUID path segments, but SDK-side normalization is the source of truth.
+
+### PII and GDPR
+
+- Always implement `beforeSend`. Strip query strings, drop request/response bodies, redact `Authorization`/`Cookie`/`X-Api-Key` headers, truncate stacks.
+- Never serve `.map` files publicly. Upload source maps to a private symbolicator keyed by release ID.
+- The Alloy Loki pipeline scrubs client IP, remote-address, and `X-Forwarded-For` shaped fields from the stored log line. User-Agent is retained as structured metadata.
+- Default retention for Tempo and Loki is 14 days.
+
+### Dashboard
+
+Grafana auto-provisions **Frontend RUM (Faro)** — page loads, distinct sessions, JS exceptions, Core Web Vitals (LCP, INP, CLS) p75 by route, browser/OS/route breakdowns, and an exception table with one-click Tempo trace links.

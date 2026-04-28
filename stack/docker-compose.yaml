@@ -115,24 +115,79 @@ services:
       start_period: 60s
 
   # ---------------------------------------------------------------------------
-  # Alloy — log collector (replaces Promtail, which is EOL since March 2026)
-  # Scrapes Docker container stdout and ships to Loki.
+  # Alloy — log collector + Faro Web SDK receiver.
+  # Ships Docker stdout to Loki. Also receives browser telemetry on port
+  # 12347 (internal-only) and fans out to Tempo + Loki. Public ingest
+  # at https://obs.bravyr.com/collect is handled by Coolify/Traefik with
+  # basic-auth, CORS, and rate-limiting middlewares (labels below).
   # ---------------------------------------------------------------------------
   alloy:
     image: grafana/alloy:v1.14.0
     container_name: bravyr_alloy
     restart: unless-stopped
     command: ["run", "/etc/alloy/config.alloy", "--storage.path=/var/lib/alloy/data"]
+    environment:
+      FARO_ALLOWED_ORIGINS: "${FARO_ALLOWED_ORIGINS:?FARO_ALLOWED_ORIGINS must be set in .env}"
     volumes:
       - ./alloy/config.alloy:/etc/alloy/config.alloy:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
       - alloy_data:/var/lib/alloy/data
+    ports:
+      # Loopback-only so local smoke tests can curl the Faro receiver
+      # without Traefik. Coolify deploys reach Alloy via the Docker
+      # bridge (container name), so this mapping has no production effect.
+      - "127.0.0.1:12347:12347"
     networks:
       - monitoring
     depends_on:
       loki:
         condition: service_started
+      otel-collector:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:12345/-/ready || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    labels:
+      # Coolify/Traefik ingress for the Faro receiver. Coolify's UI still
+      # manages the FQDN → service port mapping (obs.bravyr.com → 12347),
+      # but the middleware chain below is not expressible in the UI.
+      traefik.enable: "true"
+      traefik.http.services.faro.loadbalancer.server.port: "12347"
+
+      traefik.http.routers.faro.rule: "Host(`${FARO_PUBLIC_HOST:-obs.bravyr.com}`) && PathPrefix(`/collect`)"
+      traefik.http.routers.faro.entrypoints: "https"
+      traefik.http.routers.faro.tls: "true"
+      traefik.http.routers.faro.middlewares: "faro-auth@docker,faro-ratelimit@docker,faro-bodysize@docker,faro-security-headers@docker"
+
+      # Basic-auth middleware. FARO_BASIC_AUTH_HTPASSWD must be a bcrypt
+      # htpasswd line (e.g. `faro:$2y$05$…`). Generate with:
+      #   htpasswd -nbB faro "$FARO_APP_KEY"
+      # Dollar signs are doubled in the env var to survive compose interpolation.
+      traefik.http.middlewares.faro-auth.basicauth.users: "${FARO_BASIC_AUTH_HTPASSWD:?FARO_BASIC_AUTH_HTPASSWD must be set in .env}"
+      traefik.http.middlewares.faro-auth.basicauth.removeheader: "true"
+      traefik.http.middlewares.faro-auth.basicauth.realm: "bravyr-obs"
+
+      # Rate limit: 20 req/s sustained, 100 req/s burst, per source IP.
+      traefik.http.middlewares.faro-ratelimit.ratelimit.average: "20"
+      traefik.http.middlewares.faro-ratelimit.ratelimit.burst: "100"
+      traefik.http.middlewares.faro-ratelimit.ratelimit.sourcecriterion.ipstrategy.depth: "1"
+
+      # 1 MB body cap. memRequestBodyBytes spools beyond 64 KB to disk
+      # instead of holding the whole buffer in RAM, blunting memory
+      # amplification from large or slow-loris POSTs.
+      traefik.http.middlewares.faro-bodysize.buffering.maxrequestbodybytes: "1048576"
+      traefik.http.middlewares.faro-bodysize.buffering.memrequestbodybytes: "65536"
+
+      # HSTS + no sniff + referrer policy for the ingest domain.
+      traefik.http.middlewares.faro-security-headers.headers.stsseconds: "31536000"
+      traefik.http.middlewares.faro-security-headers.headers.stsincludesubdomains: "true"
+      traefik.http.middlewares.faro-security-headers.headers.stspreload: "true"
+      traefik.http.middlewares.faro-security-headers.headers.contenttypenosniff: "true"
+      traefik.http.middlewares.faro-security-headers.headers.referrerpolicy: "no-referrer"
 
   # ---------------------------------------------------------------------------
   # Grafana — dashboards wired to Prometheus, Tempo, and Loki

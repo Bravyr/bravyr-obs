@@ -17,13 +17,13 @@ distributor:
           endpoint: "0.0.0.0:4318"
 
 ingester:
-  max_block_bytes: 1_000_000
+  max_block_bytes: 100_000_000
   max_block_duration: 5m
   complete_block_timeout: 15m
 
 compactor:
   compaction:
-    block_retention: 72h   # keep 3 days of traces locally
+    block_retention: 336h   # keep 14 days of traces locally
 
 storage:
   trace:
