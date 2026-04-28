@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Grafana dashboard `Frontend RUM (Faro)` covering page loads, distinct sessions, JS exceptions, Core Web Vitals (LCP/INP/CLS p75 by route), browser/OS/route breakdowns, and an exception table with Tempo trace links
 - Defence-in-depth credential scrubbing in the Alloy Faro Loki pipeline (`Bearer …`, `sk-…`, `eyJ…` prefixes redacted); `user_id`, `session_id`, `trace_id`, `release`, `browser`, `os`, `route` attached as Loki structured metadata to avoid index cardinality blow-ups
 - Frontend observability plan (`docs/plans/009-frontend-observability.md`)
+- Host bind-mount + Grafana 504 diagnostics plan (`docs/plans/010-host-bind-mounts.md`) — next iteration after this PR
 - Integration guide addendum documenting the Faro SDK env var contract for the `socialup` React app
 - `stack/scripts/smoke-faro.sh` — end-to-end smoke test that posts a synthetic Faro payload to the local Alloy receiver and asserts the span surfaces in Tempo and the log surfaces in Loki
 - `alloy-fmt` CI job that runs `alloy fmt --test` against `stack/alloy/config.alloy` on every PR, catching syntax regressions before merge
