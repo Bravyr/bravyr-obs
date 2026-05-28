@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `stack/.env.example` — `GF_SERVER_ROOT_URL` field so Grafana's root URL can be set to the public FQDN behind Coolify/Traefik (defaults to `http://localhost:3000` for local dev)
 - `redistrace` sub-package for Redis command span instrumentation via redisotel (`db.statement` off by default)
 - `temporaltrace` sub-package for Temporal workflow/activity span instrumentation via the Temporal OTel contrib interceptor
 - Prometheus bearer token auth for `/metrics` scraping via `INTERNAL_API_KEY` env var
@@ -35,6 +36,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `stack/grafana/provisioning/datasources/datasources.yaml` — replaced Seq datasource with Loki datasource
 - `stack/.env.example` — removed `SEQ_API_KEY` field
 - `stack/README.md` — updated service list, architecture diagram, and quick-start instructions to reflect Loki + Promtail replacing Seq
+- `stack/docker-compose.yaml` — Grafana `GF_SERVER_ROOT_URL` is now env-driven (`${GF_SERVER_ROOT_URL:-http://localhost:3000}`) instead of hardcoded to localhost
+
+### Fixed
+
+- `stack/docker-compose.yaml` — pin `traefik.docker.network: coolify` on the Grafana service. Under Coolify, Grafana attaches to multiple Docker networks; without this label Traefik could resolve Grafana to an unroutable network IP, causing a 504 Gateway Timeout when accessing the dashboard through its public domain
 
 ### Removed
 

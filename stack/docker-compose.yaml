@@ -145,7 +145,7 @@ services:
       GF_SECURITY_ADMIN_PASSWORD: "${GRAFANA_ADMIN_PASSWORD:?GRAFANA_ADMIN_PASSWORD must be set in .env}"
       GF_SECURITY_ADMIN_USER: "${GRAFANA_ADMIN_USER:-admin}"
       GF_USERS_ALLOW_SIGN_UP: "false"
-      GF_SERVER_ROOT_URL: "http://localhost:3000"
+      GF_SERVER_ROOT_URL: "${GF_SERVER_ROOT_URL:-http://localhost:3000}"
       GF_ANALYTICS_REPORTING_ENABLED: "false"
     volumes:
       - grafana_data:/var/lib/grafana
@@ -168,3 +168,9 @@ services:
       timeout: 10s
       retries: 3
       start_period: 30s
+    labels:
+      # Grafana attaches to multiple Docker networks under Coolify (coolify +
+      # resource net + monitoring). Without this, Traefik may resolve Grafana
+      # to a network IP it cannot route to -> 504 Gateway Timeout. Pin the
+      # network Traefik must use to reach the container.
+      traefik.docker.network: "coolify"
