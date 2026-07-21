@@ -103,7 +103,11 @@ groups:
                     params: []
                   type: query
 
-      - uid: pgbackrest-archive-failures-outpacing-successes
+      # Grafana caps rule UIDs at 40 characters and rejects longer ones as a
+      # fatal provisioning error. The previous UID was 47 and took Grafana
+      # down on deploy. The title is unconstrained, so the full name lives
+      # there instead.
+      - uid: pgbackrest-archive-failures-outpacing
         title: PgBackRestArchiveFailuresOutpacingSuccesses
         condition: B
         for: 2m
