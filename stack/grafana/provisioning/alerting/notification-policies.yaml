@@ -1,0 +1,24 @@
+# ---------------------------------------------------------------------------
+# Grafana alerting: notification policy tree (file provisioning, apiVersion 1).
+#
+# No policy tree existed before this file -- Grafana's built-in default
+# (unconfigured "grafana-default-email" contact point, which can't actually
+# send anything since no SMTP is configured in stack/docker-compose.yaml) is
+# being replaced as the ORG-WIDE ROOT policy by this one entry. Since
+# pgbackrest-oncall is the only contact point that exists today, this is
+# fine, but be aware: any future alert rule with no more specific route
+# lands here too. Add child `routes:` (with `matchers:`) under this root
+# once a second contact point / alert domain shows up, rather than widening
+# this root policy's matchers (the root policy cannot have matchers itself).
+# ---------------------------------------------------------------------------
+apiVersion: 1
+
+policies:
+  - orgId: 1
+    receiver: pgbackrest-oncall
+    group_by:
+      - grafana_folder
+      - alertname
+    group_wait: 30s
+    group_interval: 5m
+    repeat_interval: 4h

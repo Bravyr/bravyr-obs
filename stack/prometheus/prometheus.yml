@@ -26,17 +26,50 @@ scrape_configs:
       - targets: ["otel-collector:8888"]
 
   # ---------------------------------------------------------------------------
-  # Exporters (postgres-exporter, redis-exporter, node-exporter) should live
-  # alongside their parent services, not in this stack. Add their scrape
-  # targets here once they are running. Example:
+  # socialup-api postgres-exporter (coolify/stacks/pgbouncer.yml). On Coolify
+  # with "Connect To Predefined Network" enabled, reachable by container name
+  # on the shared coolify network. Exposes pg_stat_archiver_* (via a custom
+  # queries.yaml -- see that stack for details) plus postgres-exporter's
+  # default collectors. Alert rules consuming pg_stat_archiver_* live in
+  # stack/grafana/provisioning/alerting/rules-pgbackrest.yaml.
+  # ---------------------------------------------------------------------------
+  - job_name: "socialup-postgres-exporter"
+    static_configs:
+      - targets:
+          - "socialup-postgres-exporter:9187"
+        labels:
+          service: "socialup-postgres"
+
+  # ---------------------------------------------------------------------------
+  # socialup-api node-exporter (coolify/stacks/node-exporter.yml,
+  # container_name: socialup-node-exporter). On Coolify with "Connect To
+  # Predefined Network" enabled, reachable by container name on the shared
+  # coolify network. Exposes standard node-exporter host metrics
+  # (node_filesystem_*, node_cpu_*, node_memory_*, ...) plus the
+  # pgBackRest textfile-collector metrics written by
+  # config/postgres/pgbackrest-textfile.sh (pgbackrest_*) via
+  # --collector.textfile.directory. Closes the disk-usage and
+  # backup-freshness/stanza-check alerting gaps documented in socialup-api
+  # docs/runbooks/postgres-restore.md "Alerting". Alert rules consuming
+  # node_filesystem_* live in
+  # stack/grafana/provisioning/alerting/rules-node-disk.yaml; rules
+  # consuming pgbackrest_* are appended to
+  # stack/grafana/provisioning/alerting/rules-pgbackrest.yaml (group
+  # pgbackrest-backup-health).
+  # ---------------------------------------------------------------------------
+  - job_name: "socialup-node-exporter"
+    static_configs:
+      - targets:
+          - "socialup-node-exporter:9100"
+        labels:
+          service: "socialup-host"
+
+  # ---------------------------------------------------------------------------
+  # redis-exporter: not wired here yet.
   #
-  # - job_name: "postgres"
-  #   static_configs:
-  #     - targets: ["host.docker.internal:9187"]
-  #
-  # - job_name: "redis"
-  #   static_configs:
-  #     - targets: ["host.docker.internal:9121"]
+  # redis-exporter (coolify/stacks/pgbouncer.yml, socialup-redis-exporter)
+  # is deployed but has no alert rules depending on it yet -- add a
+  # "redis" job (targets: ["socialup-redis-exporter:9121"]) when needed.
   # ---------------------------------------------------------------------------
 
   # ---------------------------------------------------------------------------

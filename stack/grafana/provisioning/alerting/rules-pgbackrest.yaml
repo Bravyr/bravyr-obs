@@ -1,0 +1,467 @@
+# ---------------------------------------------------------------------------
+# Grafana alerting: alert rules (file provisioning, apiVersion 1).
+#
+# pgBackRest PITR guards for socialup-postgres-dedicated (socialup-api
+# issue #674). Both rules consume pg_stat_archiver_* metrics exposed by
+# socialup-postgres-exporter via a custom postgres-exporter queries.yaml
+# (postgres-exporter v0.17.0 has no built-in pg_stat_archiver collector --
+# see coolify/stacks/pgbouncer.yml in socialup-api). Scrape job:
+# "socialup-postgres-exporter" in stack/prometheus/prometheus.yml.
+#
+# Datasource UID "prometheus" matches
+# stack/grafana/provisioning/datasources/datasources.yaml.
+#
+# Second group below (pgbackrest-backup-health) consumes pgbackrest_*
+# metrics written by socialup-api's config/postgres/pgbackrest-textfile.sh
+# (a Prometheus textfile-collector script parsing
+# `pgbackrest info --output=json` + `pgbackrest check`, baked into
+# Dockerfile.postgres, run every 10 minutes via host cron) and exposed by
+# the standalone node-exporter deployed at coolify/stacks/node-exporter.yml
+# (container socialup-node-exporter, scrape job "socialup-node-exporter" in
+# stack/prometheus/prometheus.yml). These metric names MUST exactly match
+# what that script emits -- see socialup-api
+# docs/runbooks/postgres-restore.md "Alerting" for the full list and the
+# script itself for the source of truth. The WAL/pgdata disk-usage alert is
+# a sibling file (rules-node-disk.yaml) since it's a host-level concern
+# (node_filesystem_*), not pgBackRest-specific.
+#
+# Every rule sets noDataState: Alerting / execErrState: Alerting (instead of
+# Grafana's defaults, NoData/Error, which do NOT page by default). For a
+# backup-monitoring stack, a scrape outage or query error means "backups are
+# now unmonitored" -- that must page, not sit silently unevaluated. Verified
+# against this stack's Grafana version (grafana/grafana:12.4.2,
+# stack/docker-compose.yaml) and the file-provisioning apiVersion 1 schema
+# used here: both fields are valid top-level rule keys alongside `for` /
+# `condition` / `labels`.
+# ---------------------------------------------------------------------------
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: pgbackrest-archiver
+    folder: pgBackRest PITR
+    interval: 1m
+    rules:
+      - uid: pgbackrest-archive-stalled
+        title: PgBackRestArchiveStalled
+        condition: B
+        for: 5m
+        noDataState: Alerting
+        execErrState: Alerting
+        labels:
+          severity: critical
+          team: pgbackrest
+          service: socialup-postgres
+        annotations:
+          summary: "pgBackRest WAL archiving to R2 has stalled"
+          description: >-
+            No successful pg_stat_archiver archive-push in over 10 minutes.
+            archive_timeout=60s forces a WAL switch at least every minute
+            even on a quiet database, so this always indicates a real
+            problem (archive_command failing, R2 unreachable, spool full,
+            or the exporter/DB connection itself down) -- left unaddressed,
+            pg_wal fills the data volume and Postgres hard-stops. See
+            socialup-api docs/runbooks/postgres-restore.md, "Archive
+            backlog (WAL not draining to R2)".
+          runbook_url: "https://github.com/Bravyr/socialup-api/blob/main/docs/runbooks/postgres-restore.md#archive-backlog-wal-not-draining-to-r2"
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            queryType: ""
+            relativeTimeRange:
+              from: 600
+              to: 0
+            model:
+              refId: A
+              expr: "time() - pg_stat_archiver_last_archived_time_seconds"
+              intervalMs: 1000
+              maxDataPoints: 43200
+          - refId: B
+            datasourceUid: "__expr__"
+            queryType: ""
+            relativeTimeRange:
+              from: 0
+              to: 0
+            model:
+              refId: B
+              type: classic_conditions
+              datasource:
+                type: __expr__
+                uid: "__expr__"
+              conditions:
+                - evaluator:
+                    type: gt
+                    params:
+                      - 600
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - A
+                  reducer:
+                    type: last
+                    params: []
+                  type: query
+
+      - uid: pgbackrest-archive-failures-outpacing-successes
+        title: PgBackRestArchiveFailuresOutpacingSuccesses
+        condition: B
+        for: 2m
+        noDataState: Alerting
+        execErrState: Alerting
+        labels:
+          severity: critical
+          team: pgbackrest
+          service: socialup-postgres
+        annotations:
+          summary: "pgBackRest archive-push failures are outpacing successes"
+          description: >-
+            Over the trailing 10 minutes, pg_stat_archiver's failed_count
+            grew faster than archived_count -- archive_command is failing
+            repeatedly, not just intermittently. See socialup-api
+            docs/runbooks/postgres-restore.md, "Archive backlog (WAL not
+            draining to R2)".
+          runbook_url: "https://github.com/Bravyr/socialup-api/blob/main/docs/runbooks/postgres-restore.md#archive-backlog-wal-not-draining-to-r2"
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            queryType: ""
+            relativeTimeRange:
+              from: 600
+              to: 0
+            model:
+              refId: A
+              expr: "increase(pg_stat_archiver_failed_count[10m]) - increase(pg_stat_archiver_archived_count[10m])"
+              intervalMs: 1000
+              maxDataPoints: 43200
+          - refId: B
+            datasourceUid: "__expr__"
+            queryType: ""
+            relativeTimeRange:
+              from: 0
+              to: 0
+            model:
+              refId: B
+              type: classic_conditions
+              datasource:
+                type: __expr__
+                uid: "__expr__"
+              conditions:
+                - evaluator:
+                    type: gt
+                    params:
+                      - 0
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - A
+                  reducer:
+                    type: last
+                    params: []
+                  type: query
+
+  - orgId: 1
+    name: pgbackrest-backup-health
+    folder: pgBackRest PITR
+    interval: 1m
+    rules:
+      - uid: pgbackrest-full-backup-stale
+        title: PgBackRestFullBackupStale
+        condition: B
+        for: 5m
+        noDataState: Alerting
+        execErrState: Alerting
+        labels:
+          severity: critical
+          team: pgbackrest
+          service: socialup-postgres
+        annotations:
+          summary: "No successful pgBackRest full backup in over 8 days"
+          description: >-
+            time() - pgbackrest_last_full_backup_timestamp_seconds exceeds 8
+            days. Full backups are scheduled weekly
+            (docs/runbooks/postgres-restore.md §2) -- this threshold gives a
+            full day of grace beyond that cadence. If this is firing before
+            the very first backup has ever been taken (fresh deploy, stanza
+            not yet bootstrapped), that is also correct: see
+            docs/runbooks/postgres-restore.md §1 "Stanza bootstrap".
+          runbook_url: "https://github.com/Bravyr/socialup-api/blob/main/docs/runbooks/postgres-restore.md#backup-failure-weekly-full--daily-diff-cron-job"
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            queryType: ""
+            relativeTimeRange:
+              from: 600
+              to: 0
+            model:
+              refId: A
+              expr: 'time() - pgbackrest_last_full_backup_timestamp_seconds{stanza="socialup"}'
+              intervalMs: 1000
+              maxDataPoints: 43200
+          - refId: B
+            datasourceUid: "__expr__"
+            queryType: ""
+            relativeTimeRange:
+              from: 0
+              to: 0
+            model:
+              refId: B
+              type: classic_conditions
+              datasource:
+                type: __expr__
+                uid: "__expr__"
+              conditions:
+                - evaluator:
+                    type: gt
+                    params:
+                      - 691200
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - A
+                  reducer:
+                    type: last
+                    params: []
+                  type: query
+
+      - uid: pgbackrest-diff-backup-stale
+        title: PgBackRestDiffBackupStale
+        condition: B
+        for: 5m
+        noDataState: Alerting
+        execErrState: Alerting
+        labels:
+          severity: critical
+          team: pgbackrest
+          service: socialup-postgres
+        annotations:
+          summary: "No successful pgBackRest differential backup in over 30 hours"
+          description: >-
+            time() - pgbackrest_last_diff_backup_timestamp_seconds exceeds
+            30 hours. Differential backups are scheduled daily
+            (docs/runbooks/postgres-restore.md §2) -- this threshold gives
+            6 hours of grace beyond that cadence.
+          runbook_url: "https://github.com/Bravyr/socialup-api/blob/main/docs/runbooks/postgres-restore.md#backup-failure-weekly-full--daily-diff-cron-job"
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            queryType: ""
+            relativeTimeRange:
+              from: 600
+              to: 0
+            model:
+              refId: A
+              expr: 'time() - pgbackrest_last_diff_backup_timestamp_seconds{stanza="socialup"}'
+              intervalMs: 1000
+              maxDataPoints: 43200
+          - refId: B
+            datasourceUid: "__expr__"
+            queryType: ""
+            relativeTimeRange:
+              from: 0
+              to: 0
+            model:
+              refId: B
+              type: classic_conditions
+              datasource:
+                type: __expr__
+                uid: "__expr__"
+              conditions:
+                - evaluator:
+                    type: gt
+                    params:
+                      - 108000
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - A
+                  reducer:
+                    type: last
+                    params: []
+                  type: query
+
+      - uid: pgbackrest-stanza-check-failed
+        title: PgBackRestStanzaCheckFailed
+        condition: B
+        for: 15m
+        noDataState: Alerting
+        execErrState: Alerting
+        labels:
+          severity: critical
+          team: pgbackrest
+          service: socialup-postgres
+        annotations:
+          summary: "pgbackrest check is failing against the socialup stanza"
+          description: >-
+            pgbackrest_check_success == 0 for 15 minutes (tolerates one
+            transient failure at the 10-minute cron cadence
+            docs/runbooks/postgres-restore.md §2 before paging). Indicates
+            the repo/stanza is unreachable or misconfigured -- run
+            `pgbackrest --stanza=socialup check` manually to see the live
+            error.
+          runbook_url: "https://github.com/Bravyr/socialup-api/blob/main/docs/runbooks/postgres-restore.md#lost-or-bad-stanza"
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            queryType: ""
+            relativeTimeRange:
+              from: 600
+              to: 0
+            model:
+              refId: A
+              expr: 'pgbackrest_check_success{stanza="socialup"}'
+              intervalMs: 1000
+              maxDataPoints: 43200
+          - refId: B
+            datasourceUid: "__expr__"
+            queryType: ""
+            relativeTimeRange:
+              from: 0
+              to: 0
+            model:
+              refId: B
+              type: classic_conditions
+              datasource:
+                type: __expr__
+                uid: "__expr__"
+              conditions:
+                - evaluator:
+                    type: lt
+                    params:
+                      - 1
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - A
+                  reducer:
+                    type: last
+                    params: []
+                  type: query
+
+      - uid: pgbackrest-backup-error-reported
+        title: PgBackRestBackupErrorReported
+        condition: B
+        for: 15m
+        noDataState: Alerting
+        execErrState: Alerting
+        labels:
+          severity: critical
+          team: pgbackrest
+          service: socialup-postgres
+        annotations:
+          summary: "pgbackrest info reports a non-ok stanza/repo status"
+          description: >-
+            pgbackrest_backup_error == 1 for 15 minutes. Set by
+            config/postgres/pgbackrest-textfile.sh when `pgbackrest info
+            --output=json` reports a non-zero stanza status code, or when
+            the stanza isn't found in the repo at all (e.g. before
+            stanza-create, or a repo/credentials problem). See
+            docs/runbooks/postgres-restore.md "Lost or bad stanza" and
+            "Repo growth" for related repair procedures.
+          runbook_url: "https://github.com/Bravyr/socialup-api/blob/main/docs/runbooks/postgres-restore.md#lost-or-bad-stanza"
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            queryType: ""
+            relativeTimeRange:
+              from: 600
+              to: 0
+            model:
+              refId: A
+              expr: 'pgbackrest_backup_error{stanza="socialup"}'
+              intervalMs: 1000
+              maxDataPoints: 43200
+          - refId: B
+            datasourceUid: "__expr__"
+            queryType: ""
+            relativeTimeRange:
+              from: 0
+              to: 0
+            model:
+              refId: B
+              type: classic_conditions
+              datasource:
+                type: __expr__
+                uid: "__expr__"
+              conditions:
+                - evaluator:
+                    type: gt
+                    params:
+                      - 0
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - A
+                  reducer:
+                    type: last
+                    params: []
+                  type: query
+
+      - uid: pgbackrest-textfile-script-stale
+        title: PgBackRestTextfileScriptStale
+        condition: B
+        for: 5m
+        noDataState: Alerting
+        execErrState: Alerting
+        labels:
+          severity: warning
+          team: pgbackrest
+          service: socialup-postgres
+        annotations:
+          summary: "pgbackrest-textfile.sh hasn't run recently -- backup/check metrics may be stale"
+          description: >-
+            time() - pgbackrest_textfile_last_run_seconds exceeds 30
+            minutes (3x the 10-minute cron cadence). node-exporter's
+            textfile collector re-serves the last-written values on every
+            scrape regardless of file age, so metric *absence* alone can't
+            detect a stopped cron job -- this staleness timestamp can. If
+            this fires, the other pgbackrest_* alerts above may be silently
+            stale rather than reflecting current backup state. Check
+            `docker exec socialup-postgres-dedicated
+            /usr/local/bin/pgbackrest-textfile.sh` runs cleanly and that
+            the host cron entry (docs/runbooks/postgres-restore.md §2) is
+            still installed.
+          runbook_url: "https://github.com/Bravyr/socialup-api/blob/main/docs/runbooks/postgres-restore.md#5-alerting"
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            queryType: ""
+            relativeTimeRange:
+              from: 600
+              to: 0
+            model:
+              refId: A
+              expr: 'time() - pgbackrest_textfile_last_run_seconds{stanza="socialup"}'
+              intervalMs: 1000
+              maxDataPoints: 43200
+          - refId: B
+            datasourceUid: "__expr__"
+            queryType: ""
+            relativeTimeRange:
+              from: 0
+              to: 0
+            model:
+              refId: B
+              type: classic_conditions
+              datasource:
+                type: __expr__
+                uid: "__expr__"
+              conditions:
+                - evaluator:
+                    type: gt
+                    params:
+                      - 1800
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - A
+                  reducer:
+                    type: last
+                    params: []
+                  type: query
