@@ -1,0 +1,22 @@
+# ---------------------------------------------------------------------------
+# Grafana alerting: contact points (file provisioning, apiVersion 1).
+# Auto-loaded from /etc/grafana/provisioning/alerting/*.yaml -- the whole
+# stack/grafana/provisioning/ tree is bind-mounted read-only in
+# stack/docker-compose.yaml, so no extra mount is needed for this directory.
+#
+# ${ALERT_WEBHOOK_URL} is expanded from the Grafana container's environment
+# at load time (Grafana provisioning supports $ENV_VAR / ${ENV_VAR} lookups
+# in all provisioning config, not just datasources). Set it in stack/.env --
+# see stack/.env.example. No real credentials are committed here.
+# ---------------------------------------------------------------------------
+apiVersion: 1
+
+contactPoints:
+  - orgId: 1
+    name: pgbackrest-oncall
+    receivers:
+      - uid: pgbackrest-oncall-webhook
+        type: webhook
+        settings:
+          url: ${ALERT_WEBHOOK_URL}
+          httpMethod: POST

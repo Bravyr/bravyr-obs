@@ -11,6 +11,18 @@
 networks:
   monitoring:
     driver: bridge
+  # External network shared with socialup-api's Coolify project. Prometheus
+  # needs to be on it (in addition to the local `monitoring` bridge below)
+  # to reach the socialup-postgres-exporter / socialup-node-exporter scrape
+  # targets in stack/prometheus/prometheus.yml -- those containers live in
+  # a different Coolify project and are otherwise unreachable from this
+  # stack's bridge network, which would leave every alert in
+  # rules-pgbackrest.yaml / rules-node-disk.yaml permanently in NoData.
+  # Coolify creates this network; it must already exist before this stack
+  # deploys (same pattern socialup-api's own stacks use for the same
+  # network).
+  coolify:
+    external: true
 
 volumes:
   prometheus_data:
@@ -87,6 +99,15 @@ services:
       - prometheus_data:/prometheus
     networks:
       - monitoring
+      # ADDITIVE -- keeps the existing `monitoring` network above. Needed to
+      # reach socialup-postgres-exporter:9187 / socialup-node-exporter:9100
+      # (a different Coolify project's containers) and, pre-existing but
+      # equally reliant on this same network attachment, api:8080 -- all
+      # three scrape jobs in stack/prometheus/prometheus.yml assume
+      # Prometheus is reachable on the shared `coolify` network. Without
+      # this, every alert depending on those targets sits in NoData
+      # regardless of what's happening in the target services themselves.
+      - coolify
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:9090/-/healthy || exit 1"]
       interval: 30s

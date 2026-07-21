@@ -42,6 +42,18 @@ and Tempo `tracesToLogsV2` wire log-to-trace and trace-to-log navigation.
   prometheus service in `docker-compose.yaml` if your Go services run on the host
 - Alloy requires access to the Docker socket (`/var/run/docker.sock`) and
   container log directory (`/var/lib/docker/containers`)
+- **Production (Coolify) deploy only:** the external `coolify` network must
+  already exist before this stack deploys — the `prometheus` service
+  attaches to it (in addition to the local `monitoring` bridge) to reach
+  socialup-api's exporters (`socialup-postgres-exporter:9187`,
+  `socialup-node-exporter:9100`, and `api:8080`), which live in a separate
+  Coolify project. Without this attachment, those scrape targets are
+  unreachable and every alert depending on them sits in permanent NoData.
+  **After deploying/redeploying**, verify in Grafana → Explore (or via
+  Prometheus directly) that `up{job=~"socialup-.*"} == 1` for all three
+  jobs before considering alerting live — see socialup-api
+  `docs/deployment-guide.md` (production step 6/7) and
+  `docs/runbooks/postgres-restore.md` "Alerting" for the full picture.
 
 ## Quick Start
 
@@ -135,12 +147,15 @@ Then add scrape targets to `stack/prometheus/prometheus.yml`:
 ### node-exporter
 
 node-exporter monitors **host-level** metrics (CPU, memory, disk, network). It
-should run directly on the host machine, not inside Docker — running it in a
-container limits visibility to the container's cgroup.
+should generally run directly on the host machine, not inside Docker — running
+it in a container limits visibility to the container's cgroup unless you take
+extra care (host `pid`, host root bind-mounted with `--path.rootfs`).
 
 **If you use Coolify**: Coolify provides built-in server monitoring (CPU, memory,
 disk) via its dashboard. You likely don't need node-exporter unless you want
-those metrics **in Grafana** alongside application metrics for a unified view.
+those metrics **in Grafana** alongside application metrics for a unified view,
+or — as with socialup-api below — you need the Prometheus textfile-collector
+mechanism for metrics that don't come from a normal exporter.
 
 **If you still want it**: Install as a systemd service on the VM:
 
@@ -157,6 +172,22 @@ Then add to `stack/prometheus/prometheus.yml`:
   static_configs:
     - targets: ["host.docker.internal:9100"]
 ```
+
+**Containerized exception (socialup-api):** socialup-api runs node-exporter
+as its own Coolify stack (`coolify/stacks/node-exporter.yml`,
+`container_name: socialup-node-exporter`) rather than as a host systemd
+service, specifically because it needs `--collector.textfile.directory` to
+read pgBackRest backup-health metrics written by a script running inside the
+Postgres container (`config/postgres/pgbackrest-textfile.sh`) — sharing a
+file between two host processes across a systemd/Docker boundary is more
+operationally fragile than sharing a named Docker volume between two
+containers. See socialup-api `docs/runbooks/postgres-restore.md` "Alerting"
+and this repo's `stack/prometheus/prometheus.yml` (`socialup-node-exporter`
+scrape job) and `stack/grafana/provisioning/alerting/rules-node-disk.yaml` /
+`rules-pgbackrest.yaml` (group `pgbackrest-backup-health`) for the full
+wiring. This is a deliberate exception to the "run on the host" guidance
+above, not a contradiction of it — the textfile-collector requirement is the
+deciding factor.
 
 ## Resetting State
 
