@@ -229,6 +229,18 @@ services:
       GF_USERS_ALLOW_SIGN_UP: "false"
       GF_SERVER_ROOT_URL: "${GF_SERVER_ROOT_URL:-http://localhost:3000}"
       GF_ANALYTICS_REPORTING_ENABLED: "false"
+      # Consumed by grafana/provisioning/alerting/contact-points.yaml. Grafana
+      # expands ${ALERT_WEBHOOK_URL} from its OWN process environment at
+      # provisioning load time, so listing it in stack/.env is not enough --
+      # that only exposes it to compose interpolation. Without this line the
+      # webhook url provisions empty, Grafana rejects the contact point
+      # ("required field 'url' is not specified"), provisioning fails fatally
+      # and the container crash-loops, taking the whole stack down with it.
+      # Required rather than defaulted: a contact point pointing at a dead URL
+      # would make alert delivery fail silently, which is the exact failure
+      # mode the noDataState/execErrState settings in rules-*.yaml exist to
+      # avoid.
+      ALERT_WEBHOOK_URL: "${ALERT_WEBHOOK_URL:?ALERT_WEBHOOK_URL must be set in .env}"
     volumes:
       - grafana_data:/var/lib/grafana
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
