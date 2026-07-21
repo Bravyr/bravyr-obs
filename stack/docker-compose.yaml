@@ -158,6 +158,12 @@ services:
       traefik.enable: "true"
       traefik.http.services.faro.loadbalancer.server.port: "12347"
 
+      # Same multi-network pin Grafana needs (#50): under Coolify the container
+      # attaches to coolify + resource net + monitoring, and without this
+      # Traefik may resolve Alloy to a network IP it cannot route to, producing
+      # a 504 on every ingest POST.
+      traefik.docker.network: "coolify"
+
       traefik.http.routers.faro.rule: "Host(`${FARO_PUBLIC_HOST:-obs.bravyr.com}`) && PathPrefix(`/collect`)"
       traefik.http.routers.faro.entrypoints: "https"
       traefik.http.routers.faro.tls: "true"
