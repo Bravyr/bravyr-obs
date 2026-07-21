@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Grafana failed to start after #51, crash-looping to the restart limit and taking the stack's observability down with it. `stack/grafana/provisioning/alerting/contact-points.yaml` expands `${ALERT_WEBHOOK_URL}` from the **Grafana container's own process environment**, but the variable was only documented in `stack/.env.example` and never added to the `grafana` service's `environment:` block in `stack/docker-compose.yaml`. A `.env` entry alone is visible to docker compose for interpolation, not to the container, so the webhook url always provisioned empty and Grafana rejected the contact point with `failed to validate integration "pgbackrest-oncall" ... required field 'url' is not specified`. Grafana treats that as fatal rather than skipping the file, so the whole service refused to start. This meant #51's alerting could never have worked in any environment regardless of configuration. Wired the variable through with `${ALERT_WEBHOOK_URL:?...}` (required, matching the convention already used for `GRAFANA_ADMIN_PASSWORD`, `INTERNAL_API_KEY` and `FARO_ALLOWED_ORIGINS`) so a missing value fails the deploy with a clear message instead of a crash loop. Deliberately not defaulted: a contact point pointing at a placeholder URL would make alert delivery fail silently, which is the failure mode the `noDataState: Alerting` settings in `rules-*.yaml` exist to prevent.
+
 ### Added
 
 - `stack/.env.example` — `GF_SERVER_ROOT_URL` field so Grafana's root URL can be set to the public FQDN behind Coolify/Traefik (defaults to `http://localhost:3000` for local dev)

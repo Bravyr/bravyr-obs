@@ -5,9 +5,17 @@
 # stack/docker-compose.yaml, so no extra mount is needed for this directory.
 #
 # ${ALERT_WEBHOOK_URL} is expanded from the Grafana container's environment
-# at load time (Grafana provisioning supports $ENV_VAR / ${ENV_VAR} lookups
-# in all provisioning config, not just datasources). Set it in stack/.env --
-# see stack/.env.example. No real credentials are committed here.
+# at load time (Grafana provisioning supports $ENV_VAR / ${ENV_VAR} lookups in
+# all provisioning config, not just datasources). No real credentials are
+# committed here.
+#
+# Setting it in stack/.env alone is NOT sufficient - that only exposes it to
+# docker compose for interpolation. It must ALSO be listed in the grafana
+# service's `environment:` block to reach the container's process env, and it
+# is. Do not remove it from there: an empty url is a fatal provisioning error
+# in Grafana, not a warning. The container fails to start and crash-loops,
+# taking the rest of the stack's observability down with it (this is exactly
+# what happened on 2026-07-21 after #51 merged).
 # ---------------------------------------------------------------------------
 apiVersion: 1
 
