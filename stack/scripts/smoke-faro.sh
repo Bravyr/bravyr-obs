@@ -47,9 +47,12 @@ EOF
 )
 
 echo "POST ${ALLOY_URL} (trace_id=${trace_id})"
+# faro.receiver now requires a matching X-API-Key. Pass FARO_API_KEY through so
+# the local smoke test authenticates the same way the gb-landing Worker does.
 status=$(curl -s -o /tmp/faro-smoke.resp -w "%{http_code}" \
   -X POST "${ALLOY_URL}" \
   -H "Content-Type: application/json" \
+  -H "X-API-Key: ${FARO_API_KEY:-}" \
   -H "Origin: http://localhost:5173" \
   --data "${payload}")
 if [[ "${status}" != "200" && "${status}" != "204" ]]; then
