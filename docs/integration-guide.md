@@ -405,7 +405,7 @@ Authorization: Basic base64("faro:${FARO_APP_KEY}")
 Origin: https://<configured-origin>
 ```
 
-Traefik enforces basic-auth, the origin allowlist, a 20 r/s rate limit (100 r/s burst), a 1 MB body cap, and HSTS. Alloy additionally enforces the CORS allowlist at the application layer.
+The public domain is configured in the Coolify UI ("Domains for alloy" = `https://obs.bravyr.com:12347`), which owns the router and the Let's Encrypt cert — exactly like every other service in the stack. Auth (an `X-API-Key` header), the origin allowlist, the 20 r/s rate limit (100 r/s burst) and the 1 MB payload cap are all enforced natively by `faro.receiver`, so the ingress carries no hand-written Traefik labels. (The earlier raw-label approach conflicted with Coolify's generated router and produced a permanent `no available server` / self-signed cert.)
 
 ### Stack environment variables
 
@@ -413,10 +413,8 @@ See `stack/.env.example`:
 
 | Variable | Purpose |
 |----------|---------|
-| `FARO_PUBLIC_HOST` | FQDN Traefik routes `/collect` for (default `obs.bravyr.com`). |
-| `FARO_ALLOWED_ORIGINS` | Comma-separated exact origins allowed to POST telemetry. |
-| `FARO_APP_KEY` | Shared write-only token shipped to browsers as the basic-auth password. Per-env, rotatable. |
-| `FARO_BASIC_AUTH_HTPASSWD` | Bcrypt htpasswd line for the Traefik `basicauth` middleware. Generate with `htpasswd -nbB faro "$FARO_APP_KEY"` and double every `$` to `$$` before pasting. |
+| `FARO_ALLOWED_ORIGINS` | Comma-separated exact origins allowed to POST telemetry (CORS, enforced by `faro.receiver`). |
+| `FARO_API_KEY` | Shared secret checked against the `X-API-Key` header. Plain string (no bcrypt, no `$$` escaping). Must equal each client's key. |
 
 ### Frontend SDK integration
 
