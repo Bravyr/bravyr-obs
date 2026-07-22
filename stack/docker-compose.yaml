@@ -180,11 +180,20 @@ services:
       otel-collector:
         condition: service_started
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:12345/-/ready || exit 1"]
+      # grafana/alloy ships neither wget nor curl (unlike the sibling Grafana
+      # images, whose identical wget checks pass), so the previous wget probe
+      # failed on every run -> Docker marked the container unhealthy -> Traefik
+      # excludes unhealthy containers, dropping alloy from the obs.bravyr.com
+      # load-balancer pool (503) and never provisioning its ACME cert for a
+      # router it cannot serve. bash IS in the image: use its built-in /dev/tcp
+      # to confirm the faro.receiver port -- the exact target Traefik routes to
+      # -- is accepting connections. Must run via `bash`, not the default
+      # /bin/sh (dash), which has no /dev/tcp.
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/localhost/12347"]
       interval: 30s
       timeout: 5s
       retries: 3
-      start_period: 10s
+      start_period: 20s
     labels:
       # Match Grafana exactly: the ONLY Traefik label. Coolify generates the
       # router + cert for the "Domains for alloy" entry and pins this network so
