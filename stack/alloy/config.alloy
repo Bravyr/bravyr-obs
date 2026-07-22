@@ -122,24 +122,32 @@ otelcol.exporter.otlp "tempo" {
 	}
 }
 
-// Dedicated Loki pipeline for Faro payloads. Extracts bounded fields from
-// the payload JSON and promotes them to indexed labels; keeps unbounded
-// identifiers in structured metadata; scrubs credential-shaped substrings
-// as defence-in-depth.
+// Dedicated Loki pipeline for Faro payloads. Extracts bounded fields and
+// promotes them to indexed labels; keeps unbounded identifiers in structured
+// metadata; scrubs credential-shaped substrings as defence-in-depth.
 loki.process "faro" {
-	// Extract fields from the Faro payload emitted by faro.receiver.
-	stage.json {
-		expressions = {
+	// faro.receiver emits each item as a LOGFMT line with flat keys
+	// (app_name, app_environment, browser_name, browser_os, kind, session_id,
+	// ...), NOT nested JSON. The previous stage.json parsing `meta.app.name`
+	// matched nothing, so every intended label came out empty and only
+	// source=faro survived - and Loki then filled service_name=unknown_service
+	// / detected_level=unknown. Parse the actual logfmt keys instead.
+	stage.logfmt {
+		// user_id / trace_id / view_name / level appear only on the item kinds
+		// that carry them (logs, exceptions, traced events); absent keys yield
+		// empty extracted values, dropped rather than labelled.
+		mapping = {
 			kind       = "kind",
-			app        = "meta.app.name",
-			env        = "meta.app.environment",
-			release    = "meta.app.version",
-			browser    = "meta.browser.name",
-			os         = "meta.browser.os",
-			session_id = "meta.session.id",
-			user_id    = "meta.user.id",
-			trace_id   = "meta.trace.trace_id",
-			route      = "meta.view.name",
+			app        = "app_name",
+			env        = "app_environment",
+			release    = "app_version",
+			browser    = "browser_name",
+			os         = "browser_os",
+			session_id = "session_id",
+			user_id    = "user_id",
+			trace_id   = "trace_id",
+			route      = "view_name",
+			log_level  = "level",
 		}
 	}
 
@@ -157,6 +165,22 @@ loki.process "faro" {
 		template = "{{ regexReplaceAll `/[0-9]+` .Value `/:id` }}"
 	}
 
+	// service_name: Loki stamps every stream with service_name, defaulting to
+	// "unknown_service" when the pipeline sets none. Group RUM streams per app
+	// (gb-landing, socialup, ...) instead.
+	stage.template {
+		source   = "service_name"
+		template = "{{ .app }}"
+	}
+
+	// level: measurements and events carry no level, so Loki's auto-detection
+	// gives up and stamps detected_level=unknown. Derive an explicit level -
+	// exceptions are errors, logs keep their own level, everything else info.
+	stage.template {
+		source   = "level"
+		template = "{{ if eq .kind \"exception\" }}error{{ else if .log_level }}{{ .log_level }}{{ else }}info{{ end }}"
+	}
+
 	stage.static_labels {
 		values = {
 			source = "faro",
@@ -166,12 +190,14 @@ loki.process "faro" {
 	// Bounded, low-cardinality fields → indexed labels.
 	stage.labels {
 		values = {
-			app     = "",
-			kind    = "",
-			env     = "",
-			browser = "",
-			os      = "",
-			route   = "",
+			app          = "",
+			kind         = "",
+			env          = "",
+			browser      = "",
+			os           = "",
+			route        = "",
+			level        = "",
+			service_name = "",
 		}
 	}
 
@@ -205,12 +231,13 @@ loki.process "faro" {
 		replace    = "$1[REDACTED]"
 	}
 
-	// Strip common IP-shaped fields so Loki never stores the client
-	// address. Faro payloads and any forwarded headers picked up by the
-	// receiver are both covered by matching the JSON value form.
+	// Strip common IP-shaped fields so Loki never stores the client address.
+	// The line is logfmt (key=value), so match that form - the old JSON form
+	// never matched and silently did nothing. Bare `ip` is dropped as too
+	// broad for logfmt key matching.
 	stage.replace {
-		expression = "\"(client_ip|remote_addr|remoteAddr|ip|x_forwarded_for)\":\\s*\"[^\"]+\""
-		replace    = "\"$1\":\"[REDACTED]\""
+		expression = "(^|\\s)(client_ip|remote_addr|remoteAddr|remote_ip|x_forwarded_for)=(\"[^\"]*\"|\\S+)"
+		replace    = "$1$2=[REDACTED]"
 	}
 
 	forward_to = [loki.write.loki.receiver]
