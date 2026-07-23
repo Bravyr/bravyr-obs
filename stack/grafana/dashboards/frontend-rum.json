@@ -116,7 +116,7 @@
       "targets": [
         {
           "datasource": { "type": "loki", "uid": "${datasource_loki}" },
-          "expr": "count(count by (session_id) ({source=\"faro\", app=~\"$app\", env=~\"$env\"} | logfmt | session_id != \"\")) or vector(0)",
+          "expr": "count(sum by (session_id) (count_over_time({source=\"faro\", app=~\"$app\", env=~\"$env\"} | logfmt | session_id != \"\" [$__range]))) or vector(0)",
           "queryType": "instant",
           "refId": "A"
         }
@@ -241,7 +241,7 @@
       "targets": [
         {
           "datasource": { "type": "loki", "uid": "${datasource_loki}" },
-          "expr": "quantile_over_time(0.75, {source=\"faro\", app=~\"$app\", env=~\"$env\", kind=\"measurement\"} | logfmt | value_lcp != \"\" | unwrap value_lcp [$__rate_interval]) by (route)",
+          "expr": "quantile_over_time(0.75, {source=\"faro\", app=~\"$app\", env=~\"$env\", kind=\"measurement\"} | logfmt | value_lcp != \"\" | unwrap value_lcp [$__interval]) by (route)",
           "legendFormat": "{{route}}",
           "queryType": "range",
           "refId": "A"
@@ -283,7 +283,7 @@
       "targets": [
         {
           "datasource": { "type": "loki", "uid": "${datasource_loki}" },
-          "expr": "quantile_over_time(0.75, {source=\"faro\", app=~\"$app\", env=~\"$env\", kind=\"measurement\"} | logfmt | value_inp != \"\" | unwrap value_inp [$__rate_interval]) by (route)",
+          "expr": "quantile_over_time(0.75, {source=\"faro\", app=~\"$app\", env=~\"$env\", kind=\"measurement\"} | logfmt | value_inp != \"\" | unwrap value_inp [$__interval]) by (route)",
           "legendFormat": "{{route}}",
           "queryType": "range",
           "refId": "A"
@@ -325,7 +325,7 @@
       "targets": [
         {
           "datasource": { "type": "loki", "uid": "${datasource_loki}" },
-          "expr": "quantile_over_time(0.75, {source=\"faro\", app=~\"$app\", env=~\"$env\", kind=\"measurement\"} | logfmt | value_cls != \"\" | unwrap value_cls [$__rate_interval]) by (route)",
+          "expr": "quantile_over_time(0.75, {source=\"faro\", app=~\"$app\", env=~\"$env\", kind=\"measurement\"} | logfmt | value_cls != \"\" | unwrap value_cls [$__interval]) by (route)",
           "legendFormat": "{{route}}",
           "queryType": "range",
           "refId": "A"
