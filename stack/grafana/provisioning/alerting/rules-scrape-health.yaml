@@ -1,0 +1,106 @@
+# ---------------------------------------------------------------------------
+# Grafana alerting: alert rules (file provisioning, apiVersion 1).
+#
+# Scrape-health guard for the socialup-* jobs in stack/prometheus/prometheus.yml.
+#
+# Why this exists: on 2026-07-21 the socialup-node-exporter target began
+# answering scrapes with HTTP 200 and an empty body. `up` stayed 1 -- it only
+# reports that a scrape succeeded and parsed, not that it contained anything --
+# so the documented post-deploy check (`up{job=~"socialup-.*"} == 1`, see
+# stack/README.md) passed while every node_filesystem_* and pgbackrest_* series
+# was missing. All seven rules depending on that exporter went to NoData and,
+# via noDataState: Alerting, fired continuously for seven weeks. They named
+# seven symptoms ("disk over 85% full", "no full backup in 8 days", ...) and
+# never the cause, and each one was a claim about data that did not exist.
+#
+# noDataState: Alerting was doing its job; the problem is that it can only say
+# "this rule has no data", once per rule. This rule says which target went
+# quiet, so a dead exporter reads as one accurate alert instead of a fan-out of
+# misleading ones.
+#
+# scrape_samples_scraped is chosen over `up` deliberately: it is 0 both when the
+# target is down and when it is up but exposing nothing, and the latter is the
+# case `up` cannot see. To tell the two apart when this fires, check
+# `up{job=~"socialup-.*"}` -- 0 means unreachable, 1 means reachable but empty.
+#
+# The series goes absent entirely if a job is removed from prometheus.yml, which
+# lands on noDataState: Alerting -- also correct, since a scrape job that
+# vanished is exactly as unmonitored as one returning nothing.
+#
+# Uses classic_conditions to match the other rule files in this directory. That
+# reduces all matching series into a single alert instance rather than one per
+# job, so the alert names the fault but not the target; the query in the
+# description recovers that in one step. Worth revisiting as reduce+threshold
+# per-series expressions if a third exporter joins.
+#
+# Datasource UID "prometheus" matches
+# stack/grafana/provisioning/datasources/datasources.yaml.
+# ---------------------------------------------------------------------------
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: scrape-health
+    folder: Scrape Health
+    interval: 1m
+    rules:
+      - uid: socialup-scrape-returns-no-samples
+        title: SocialupExporterScrapeReturnsNoSamples
+        condition: B
+        for: 10m
+        noDataState: Alerting
+        execErrState: Alerting
+        labels:
+          severity: critical
+          team: platform
+          service: socialup-observability
+        annotations:
+          summary: "A socialup-* Prometheus target is returning zero samples"
+          description: >-
+            At least one job matching socialup-* has scraped 0 samples for
+            over 10 minutes: the target is either unreachable or answering
+            with an empty body. Every alert rule reading that exporter's
+            metrics is now evaluating against nothing and its state means
+            nothing -- treat those alerts as unknown, not as true. Run
+            `scrape_samples_scraped{job=~"socialup-.*"}` to find which job,
+            then `up{job=~"socialup-.*"}` to tell unreachable (0) from
+            reachable-but-empty (1). A `for` of 10m rides out a redeploy of
+            the scraped stack without paging.
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            queryType: ""
+            relativeTimeRange:
+              from: 600
+              to: 0
+            model:
+              refId: A
+              expr: 'scrape_samples_scraped{job=~"socialup-.*"}'
+              intervalMs: 1000
+              maxDataPoints: 43200
+          - refId: B
+            datasourceUid: "__expr__"
+            queryType: ""
+            relativeTimeRange:
+              from: 0
+              to: 0
+            model:
+              refId: B
+              type: classic_conditions
+              datasource:
+                type: __expr__
+                uid: "__expr__"
+              conditions:
+                - evaluator:
+                    type: lt
+                    params:
+                      - 1
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - A
+                  reducer:
+                    type: last
+                    params: []
+                  type: query

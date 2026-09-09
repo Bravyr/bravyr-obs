@@ -55,12 +55,14 @@ groups:
         annotations:
           summary: "pgBackRest WAL archiving to R2 has stalled"
           description: >-
-            No successful pg_stat_archiver archive-push in over 10 minutes.
-            archive_timeout=60s forces a WAL switch at least every minute
-            even on a quiet database, so this always indicates a real
-            problem (archive_command failing, R2 unreachable, spool full,
-            or the exporter/DB connection itself down) -- left unaddressed,
-            pg_wal fills the data volume and Postgres hard-stops. See
+            No successful pg_stat_archiver archive-push in over 10 minutes,
+            or none ever. archive_timeout=60s forces a WAL switch at least
+            every minute even on a quiet database, so this always indicates
+            a real problem (archive_command failing or not set,
+            archive_mode off, R2 unreachable, spool full, or the
+            exporter/DB connection itself down) -- left unaddressed, pg_wal
+            fills the data volume and Postgres hard-stops. A value of 86400
+            is the synthetic never-archived case, not a real age. See
             socialup-api docs/runbooks/postgres-restore.md, "Archive
             backlog (WAL not draining to R2)".
           runbook_url: "https://github.com/Bravyr/socialup-api/blob/main/docs/runbooks/postgres-restore.md#archive-backlog-wal-not-draining-to-r2"
@@ -73,7 +75,13 @@ groups:
               to: 0
             model:
               refId: A
-              expr: "time() - pg_stat_archiver_last_archived_time_seconds"
+              # last_archive_age is already an age in seconds, so the >600 threshold
+              # carries over unchanged from the old time()-timestamp form. It is NaN
+              # when last_archived_time is NULL (nothing ever archived), and NaN fails
+              # every comparison -- hence the archived_count==0 fallback, which
+              # substitutes a synthetic 86400 so that case alerts on its own condition
+              # instead of silently degrading to NoData.
+              expr: '(pg_stat_archiver_last_archive_age >= 0) or ((pg_stat_archiver_archived_count == 0) * 0 + 86400)'
               intervalMs: 1000
               maxDataPoints: 43200
           - refId: B
